@@ -25,6 +25,25 @@ function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+async function readErrorPayload(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json().catch(() => null)) as any;
+    if (payload?.error) {
+      return typeof payload.error === "string" ? payload.error : JSON.stringify(payload.error);
+    }
+    if (payload?.message) {
+      return typeof payload.message === "string" ? payload.message : JSON.stringify(payload.message);
+    }
+    if (payload) {
+      return typeof payload === "string" ? payload : JSON.stringify(payload);
+    }
+    return null;
+  }
+  const text = await response.text().catch(() => "");
+  return text.trim() || null;
+}
+
 export async function callFeatherlessApi(prompt: any): Promise<any | null> {
   const apiKey = process.env.FEATHERLESS_API_KEY?.trim();
   const primaryModel = process.env.FEATHERLESS_MODEL?.trim();
@@ -62,7 +81,9 @@ export async function callFeatherlessApi(prompt: any): Promise<any | null> {
       clearTimeout(timeout);
 
       if (!response.ok) {
-        failures.push(`${model}: Featherless API error (${response.status}).`);
+        const payload = await readErrorPayload(response);
+        const detail = payload ? ` ${payload}` : "";
+        failures.push(`${model}: Featherless API error (${response.status}).${detail}`);
         continue;
       }
 

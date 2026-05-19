@@ -49,7 +49,7 @@ GeminEYE is provided for informational and educational purposes only. It does no
 
 ## 🌐 Live Demo
 
-**[🔗 View Live](https://gemineye-v1.up.railway.app)**
+**[🔗 View Live](https://gemineye-v2  .up.railway.app)**
 
 ---
 
