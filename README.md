@@ -2,7 +2,17 @@
 
 **AI-powered contract risk analyzer with voice intake and automated alerts.** Upload PDFs, DOCX files, paste contract text, or transcribe audio via Speechmatics. GeminEYE extracts clauses, scores risk, and delivers structured investigator-style memos with evidence-backed findings. High-risk scores can trigger Resend email alerts.
 
-Built for legal teams, compliance officers, and contract negotiators who need intelligent contract analysis powered by Gemini and open-source models via Featherless.
+Built for legal teams, compliance officers, and contract negotiators who need fast, structured contract analysis powered by Gemini and open-source models via Featherless.
+
+## Highlights
+
+- **Multi-format intake** - PDF, DOCX, TXT, paste raw text, or transcribe audio
+- **Structured memo output** - Narrative, summary, and granular findings with recommendations
+- **Risk scoring** - Overall risk score on a 0–10 scale
+- **Speechmatics voice intake** - Batch transcription for uploaded audio files
+- **Resend alerts** - Email escalation when risk scores exceed your threshold
+- **Guardrails and governance** - Prompt-injection detection, moderation, redaction, and rate limiting
+- **Security audit trail** - Local event log for allowed, blocked, fallback, and error outcomes
 
 ## AI Agent Olympics Hackathon (May 13-20, 2026)
 
@@ -26,22 +36,6 @@ This project is provider-agnostic. It supports Gemini (direct or via AI/ML API) 
 ## Legal Disclaimer
 
 GeminEYE is provided for informational and educational purposes only. It does not provide legal advice, legal representation, or a substitute for a qualified attorney or formal legal review. Any output should be reviewed independently before being relied on for business or legal decisions.
-
----
-
-## 🎯 Features
-
-- **Multi-format intake** - PDF, DOCX, TXT, paste raw text, or transcribe audio
-- **Intelligent extraction** - Automatically pull contract language and structure
-- **Risk categorization** - Liability, indemnity, data privacy, termination, IP, venue
-- **Structured memo output** - Narrative, summary, and granular findings with recommendations
-- **Risk scoring** - Overall risk score on a 0–10 scale
-- **Real-time analysis** - Gemini via AI/ML API, direct Gemini, or Featherless models
-- **Speechmatics voice intake** - Batch transcription for uploaded audio files
-- **Resend alerts** - Email escalation when risk scores exceed your threshold
-- **Guardrails and governance** - Prompt-injection detection, moderation, redaction, and rate limiting
-- **Security audit trail** - Local event log for allowed, blocked, fallback, and error outcomes
-- **Fallback support** - Sample memos when API is unavailable
 
 ---
 
@@ -124,6 +118,7 @@ Create a `.env.local` file:
 AI_ML_API_KEY=your_api_key_here
 AI_ML_API_MODEL=google/gemini-3-1-pro-preview
 AI_ML_API_BASE_URL=https://api.aimlapi.com
+AI_ML_API_COMPLETIONS_URL=
 AI_ML_API_AUTH_HEADER=Authorization
 AI_ML_API_AUTH_SCHEME=Bearer
 
@@ -147,7 +142,7 @@ SPEECHMATICS_DIARIZATION=none
 # Resend alerts (optional)
 RESEND_API_KEY=your_resend_key_here
 RESEND_FROM="GeminEYE Alerts <alerts@yourdomain.com>"
-RESEND_TO=you@example.com
+RESEND_TO=you@example.com,ops@example.com
 RESEND_RISK_THRESHOLD=7.5
 ```
 
@@ -369,9 +364,18 @@ node scripts/check-secrets.js
 
 This scans staged files for common API key patterns and warns you before commit.
 
+### Data Handling
+
+- Contract text is sent to AI/ML API, Gemini, or Featherless for processing
+- Speechmatics audio is sent to Speechmatics for transcription
+- Resend alerts only include summary highlights (not full contract text)
+- No data is permanently stored on the server
+- Analyze in fallback mode (sample data) if you prefer to avoid external API calls
+- Always review AI recommendations—they complement but don't replace legal review
+
 ---
 
-## Bugs & Troubleshooting
+## Troubleshooting
 
 ### "AI/ML API returned invalid JSON format"
 - ✅ Verify `AI_ML_API_KEY` and `AI_ML_API_MODEL` are in `.env.local`
@@ -419,17 +423,6 @@ GeminEYE analyzes contracts across these dimensions:
 
 ---
 
-## 🔐 Security & Privacy
-
-- Contract text is sent to AI/ML API, Gemini, or Featherless for processing
-- Speechmatics audio is sent to Speechmatics for transcription
-- Resend alerts only include summary highlights (not full contract text)
-- No data is permanently stored on the server
-- Analyze in fallback mode (sample data) if you prefer to avoid external API calls
-- Always review AI recommendations—they complement but don't replace legal review
-
----
-
 ## 📦 Dependencies
 
 Key packages:
@@ -446,15 +439,7 @@ See `package.json` for the complete list.
 
 ## 📝 License
 
-MIT License — See LICENSE for details.
-
----
-
-## Open Source
-
-This project is released under the MIT License. You may copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, provided you include the original copyright and license notice in any substantial portions of the software.
-
-For the full license text, see the `LICENSE` file.
+MIT License. See LICENSE for details.
 
 ---
 
@@ -475,7 +460,7 @@ git push origin feature/your-feature
 
 | Link | URL |
 |------|-----|
-| **Live Demo** | [🔗 gemineye-production.up.railway.app](https://gemineye-production.up.railway.app) |
+| **Live Demo** | [🔗 gemineye-v1.up.railway.app](https://gemineye-v1.up.railway.app) |
 | **GitHub Repo** | [🔗 github.com/monsiu/gemineye](https://github.com/monsiu/gemineye) |
 | **Issues & Feedback** | [🔗 GitHub Issues](https://github.com/monsiu/GeminEYE/issues) |
 | **API Documentation** | [🔗 docs.aimlapi.com](https://docs.aimlapi.com) |
