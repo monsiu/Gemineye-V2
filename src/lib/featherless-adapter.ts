@@ -56,7 +56,7 @@ export async function callFeatherlessApi(prompt: any): Promise<any | null> {
 
   const completionsUrl = buildCompletionsUrl(baseUrl);
   const appUrl = process.env.FEATHERLESS_APP_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  const appTitle = process.env.FEATHERLESS_APP_TITLE?.trim() || "GeminEYE";
+  const appTitle = process.env.FEATHERLESS_APP_TITLE?.trim() || "GeminEYE-V2";
   const failures: string[] = [];
 
   for (const model of models) {

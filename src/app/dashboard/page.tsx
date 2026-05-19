@@ -104,7 +104,7 @@ const ITEMS_PER_PAGE = 6;
 
 function providerDisplayName(provider?: ProviderName | null) {
   if (provider === "aiml") return "Gemini";
-  if (provider === "featherless") return "Featherless gap-fill";
+  if (provider === "featherless") return "Featherless parallel pass";
   if (provider === "gemini") return "Gemini direct";
   return "Provider not recorded";
 }
@@ -395,7 +395,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="font-serif text-3xl font-semibold">Report dashboard</h1>
-              <p className="mt-2 text-sm text-muted">View Gemini-led reports with Featherless gap-filling, plus Speechmatics intake and Resend alert metadata.</p>
+              <p className="mt-2 text-sm text-muted">View Gemini + Featherless parallel reports with consolidated scoring, plus Speechmatics intake and Resend alert metadata.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button onClick={clearAllReports} className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Clear all</button>
@@ -537,11 +537,11 @@ export default function DashboardPage() {
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="font-serif text-2xl font-semibold text-ink">Reports and delivery stack</h2>
-              <p className="mt-1 text-sm text-muted">Saved memo exports include Gemini/Featherless agreement flags, Featherless gap-fill clauses, provider models, intake, and Resend alert context.</p>
+              <p className="mt-1 text-sm text-muted">Saved memo exports include Gemini/Featherless agreement flags, Featherless-only clauses, provider models, intake, and Resend alert context.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Gemini</span>
-              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Featherless gap-fill</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Featherless parallel pass</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Gemini direct fallback</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Speechmatics</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Resend</span>
@@ -635,7 +635,7 @@ export default function DashboardPage() {
         </section>
 
         <div className="mt-8 rounded-2xl border border-line bg-panel px-5 py-4 text-xs text-muted">
-          GeminEYE is provided for informational support only and does not replace legal advice. Provider stack: Gemini-first analysis with Featherless gap-filling, Speechmatics transcription, and Resend alerts.
+          GeminEYE-V2 is provided for informational support only and does not replace legal advice. Provider stack: Gemini + Featherless parallel analysis with consolidated scoring, Speechmatics transcription, and Resend alerts.
         </div>
 
         {showUndo && deletedReport ? (

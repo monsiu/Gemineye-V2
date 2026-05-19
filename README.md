@@ -1,8 +1,8 @@
-# GeminEYE 🕵️‍♂️📄
+# GeminEYE-V2 🕵️‍♂️📄
 
-**AI-powered contract risk analyzer with voice intake, open-source model fallback, and automated alerts.** Upload PDFs, DOCX files, paste contract text, or transcribe audio via Speechmatics. GeminEYE extracts clauses, scores risk, and delivers structured investigator-style memos with evidence-backed findings. Gemini is tried first, Featherless open-source models are tried next, and high-risk scores can trigger Resend email alerts.
+**AI-powered contract risk analyzer with voice intake, parallel provider checks, and automated alerts.** Upload PDFs, DOCX files, paste contract text, or transcribe audio via Speechmatics. GeminEYE-V2 extracts clauses, scores risk, and delivers structured investigator-style memos with evidence-backed findings. Gemini (via the AI/ML API) runs alongside Featherless open-source models, and GeminEYE-V2 consolidates scores and findings. High-risk scores can trigger Resend email alerts.
 
-Built for legal teams, compliance officers, and contract negotiators who need fast, structured contract analysis powered by Gemini, Featherless open-source models, Gemini fallback, Speechmatics transcription, and Resend alerts.
+Built for legal teams, compliance officers, and contract negotiators who need fast, structured contract analysis powered by Gemini (via the AI/ML API), Featherless open-source models, Speechmatics transcription, and Resend alerts.
 
 ## Highlights
 
@@ -11,7 +11,7 @@ Built for legal teams, compliance officers, and contract negotiators who need fa
 - **Risk scoring** - Overall risk score on a 0–10 scale
 - **Speechmatics voice intake** - Batch transcription for uploaded audio files
 - **Resend alerts** - Email escalation when risk scores exceed your threshold
-- **Provider failover** - Gemini primary, Featherless open-source fallback/helper
+- **Parallel provider pass** - Gemini (AI/ML API) + Featherless with consolidated scores and findings
 - **Guardrails and governance** - Prompt-injection detection, moderation, redaction, and rate limiting
 - **Security audit trail** - Local event log for allowed, blocked, fallback, and error outcomes
 
@@ -19,7 +19,7 @@ Built for legal teams, compliance officers, and contract negotiators who need fa
 
 The AI Agent Olympics Hackathon runs during Milan AI Week and focuses on enterprise-grade autonomous agents.
 
-**Prize tracks targeted (excluding Kraken):** Vultr, Google Gemini, Featherless, Speechmatics. We are not targeting the Kraken trading track.
+**Prize tracks targeted (excluding Kraken):** Google Gemini, Featherless, Speechmatics. We are not targeting the Kraken trading track.
 
 ### Track alignment
 
@@ -31,25 +31,27 @@ The AI Agent Olympics Hackathon runs during Milan AI Week and focuses on enterpr
 ### Featherless challenge fit
 
 - **Domain-specialized:** contract-risk review for liability, indemnity, privacy, termination, IP, and venue.
-- **Async-first workflow:** Speechmatics batch jobs, background-style provider failover, local audit trails, and Resend event alerts for high-risk scores.
+- **Async-first workflow:** Speechmatics batch jobs, parallel provider pass, local audit trails, and Resend event alerts for high-risk scores.
 - **Open-source ready:** MIT license, reproducible prompts, provider priority, and environment-only secrets.
 - **Production-shaped:** typed API routes, guarded inputs, provider attempts, HTML/JSON exports, dashboard auditability, and deployable Next.js runtime.
 
-Deployment is planned for Vultr at the end of the build cycle.
-
 ## Hackathon Disclosure
 
-This project is a domain-specialized contract-risk agent with provider-swappable inference. It tries Gemini first, then Featherless open-source models through an OpenAI-compatible API, . Speechmatics handles async audio transcription, Resend handles event-driven risk alerts, and every report export records the provider/model/intake/alert trail for hackathon judging.
+This project is a domain-specialized contract-risk agent with provider-swappable inference. Gemini (via the AI/ML API) runs alongside Featherless open-source models through an OpenAI-compatible API, and GeminEYE-V2 consolidates scores and findings across both passes. Speechmatics handles async audio transcription, Resend handles event-driven risk alerts, and every report export records the provider/model/intake/alert trail for hackathon judging.
+
+## Provider Disclaimer (AI/ML Gemini Access)
+
+Direct Google Gemini credits were limited during development, so GeminEYE-V2 uses the AI/ML API gateway for Gemini access. The underlying model is still Gemini; only the gateway changed. Direct Gemini remains supported as an optional fallback if you supply `GEMINI_API_KEY`.
 
 ## Legal Disclaimer
 
-GeminEYE is provided for informational and educational purposes only. It does not provide legal advice, legal representation, or a substitute for a qualified attorney or formal legal review. Any output should be reviewed independently before being relied on for business or legal decisions.
+GeminEYE-V2 is provided for informational and educational purposes only. It does not provide legal advice, legal representation, or a substitute for a qualified attorney or formal legal review. Any output should be reviewed independently before being relied on for business or legal decisions.
 
 ---
 
 ## 🌐 Live Demo
 
-**[🔗 View Live](https://gemineye-v2  .up.railway.app)**
+**[🔗 View Live](https://gemineye-v2.up.railway.app)**
 
 ---
 
@@ -65,7 +67,7 @@ npm install
 
 # Configure environment
 cp .env.local.example .env.local
-# Edit .env.local with your Gemini key
+# Edit .env.local with your AI/ML (Gemini) key
 
 # Start dev server
 npm run dev
@@ -75,16 +77,52 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## Judge Setup (Quick + Detailed)
+
+1. Install Node.js 20.9+.
+2. Clone and install:
+
+```bash
+git clone https://github.com/monsiu/gemineye.git
+cd gemineye
+npm install
+```
+
+3. Create your env file:
+
+```bash
+cp .env.local.example .env.local
+```
+
+4. Configure required keys in `.env.local`:
+- `AI_ML_API_KEY` and `AI_ML_API_MODEL` (Gemini via AI/ML API, required for primary analysis).
+- `FEATHERLESS_API_KEY` and `FEATHERLESS_MODEL` (enables the parallel Featherless pass and consolidation).
+- `SPEECHMATICS_API_KEY` (enables audio transcription).
+- `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_TO` (enables alerts; set `RESEND_RISK_THRESHOLD=6.0` to force a test alert).
+- Optional: `GEMINI_API_KEY` for direct Gemini fallback.
+
+5. Run the app:
+
+```bash
+npm run dev
+```
+
+6. Validate:
+- Paste a sample contract and run analysis to see the consolidated score and provider trail.
+- Upload a PDF or DOCX to test extraction.
+- Upload audio to test Speechmatics (if configured).
+- Lower the Resend threshold to confirm alert delivery (if configured).
+
 ## 📋 How It Works
 
 ### 1. **Contract Intake**
 Upload a file (PDF, DOCX, TXT), paste contract language directly in the text area, or transcribe audio using Speechmatics.
 
 ### 2. **Text Extraction**
-GeminEYE extracts and cleans text from documents, removing extra whitespace and normalizing formatting.
+GeminEYE-V2 extracts and cleans text from documents, removing extra whitespace and normalizing formatting.
 
 ### 3. **AI Analysis**
-The contract is routed through the provider chain: Gemini first, Featherless open-source models second, and direct Gemini last. The first provider that returns valid memo JSON is used. The model:
+The contract is sent to Gemini (via the AI/ML API) and Featherless in parallel when configured. GeminEYE-V2 consolidates scores and findings across both passes, and falls back to any available provider if one fails. Direct Gemini can be enabled as an optional fallback. The model:
 - Identifies high-risk clauses
 - Categorizes findings (liability, indemnity, data privacy, etc.)
 - Scores overall risk (0–10)
@@ -101,7 +139,7 @@ Results are formatted as an investigator-style memo:
 If the overall risk score exceeds your threshold, Resend sends an email alert to the configured recipients.
 
 ### 6. **Provider Trail**
-The UI, dashboard, JSON export, HTML report, and Resend email include Gemini, Featherless, Speechmatics, and Resend status chips so judges can see exactly which route handled the run.
+The UI, dashboard, JSON export, HTML report, and Resend email include Gemini + Featherless status chips, consolidated scoring, Speechmatics intake, and Resend alert metadata so judges can see exactly which route handled the run.
 
 ---
 
@@ -110,9 +148,9 @@ The UI, dashboard, JSON export, HTML report, and Resend email include Gemini, Fe
 ### Prerequisites
 - Node.js 20.9+
 - npm or yarn
-- Gemini account with Gemini access
-- Gemini Key (optional, for direct Gemini linking) refer to [#hackathon-disclosure](https://github.com/monsiu/GeminEYE#hackathon-disclosure) above.
-- Optional: Featherless, Speechmatics, and Resend API keys for open models, transcription, and alerting.
+- Gemini access via the AI/ML API (AIML) for primary analysis
+- Optional: direct Gemini key for fallback
+- Optional: Featherless, Speechmatics, and Resend API keys for open models, transcription, and alerting
 
 ### Installation
 
@@ -125,7 +163,7 @@ npm install
 Create a `.env.local` file:
 
 ```env
-# Gemini
+# Gemini via AI/ML API (primary)
 AI_ML_API_KEY=your_api_key_here
 AI_ML_API_MODEL=google/gemini-3-1-pro-preview
 AI_ML_API_BASE_URL=https://api.aimlapi.com
@@ -135,19 +173,19 @@ AI_ML_API_AUTH_SCHEME=Bearer
 AI_ML_API_MAX_TOKENS=4096
 AI_PROVIDER_PRIORITY=aiml,featherless,gemini
 
-# Gemini fallback (optional)
+# Gemini direct fallback (optional)
 GEMINI_API_KEY=your_gemini_key_here
 GEMINI_MODEL=gemini-2.0-flash
 GEMINI_MAX_OUTPUT_TOKENS=2048
 
-# Featherless open-source fallback/helper
+# Featherless open-source parallel pass
 FEATHERLESS_API_KEY=your_featherless_key_here
 FEATHERLESS_MODEL=your_featherless_model_id
 FEATHERLESS_FALLBACK_MODELS=
 FEATHERLESS_BASE_URL=https://api.featherless.ai/v1
 FEATHERLESS_MAX_TOKENS=4096
 FEATHERLESS_APP_URL=http://localhost:3000
-FEATHERLESS_APP_TITLE=GeminEYE
+FEATHERLESS_APP_TITLE=GeminEYE-V2
 
 # Speechmatics (optional)
 SPEECHMATICS_API_KEY=your_speechmatics_key_here
@@ -158,28 +196,28 @@ SPEECHMATICS_DIARIZATION=none
 
 # Resend alerts (optional)
 RESEND_API_KEY=your_resend_key_here
-RESEND_FROM="GeminEYE Alerts <alerts@yourdomain.com>"
+RESEND_FROM="GeminEYE-V2 Alerts <alerts@yourdomain.com>"
 RESEND_TO=you@example.com,ops@example.com
 RESEND_RISK_THRESHOLD=7.5
 ```
 
 ### Provider Swap
 
-Provider priority is: **Gemini -> Featherless** by default. The API records every provider attempt and only returns the demo fallback after all configured providers fail. You can override the order with `AI_PROVIDER_PRIORITY=aiml,featherless,gemini`.
+Provider strategy: if both AIML (Gemini) and Featherless are configured, GeminEYE-V2 runs them in parallel and consolidates scores and findings. If one is missing or fails, the app falls back using `AI_PROVIDER_PRIORITY=aiml,featherless,gemini`.
 
-To use **Gemini**:
+To use **Gemini via AI/ML API (primary)**:
 - Keep `AI_ML_API_BASE_URL=https://api.aimlapi.com`
 - Keep `AI_ML_API_MODEL=google/gemini-3-1-pro-preview`
 
-To use **Featherless** (open-source models):
+To use **Featherless** (parallel open-source pass):
 - Set `FEATHERLESS_API_KEY`, `FEATHERLESS_MODEL`, and `FEATHERLESS_BASE_URL`
 - Optionally set `FEATHERLESS_FALLBACK_MODELS` as a comma-separated list for backup open-source model IDs
-- Move `featherless` earlier in `AI_PROVIDER_PRIORITY` only if you want it to run before Gemini
+- Leave `featherless` in `AI_PROVIDER_PRIORITY` for fallback ordering when one provider is missing
 
-To use **direct Gemini** instead:
+To use **direct Gemini** as fallback:
 - Set `GEMINI_API_KEY`
 - Optionally set `GEMINI_MODEL` and `GEMINI_MAX_OUTPUT_TOKENS`
-- Keep it last in `AI_PROVIDER_PRIORITY` when you want Gemini and Featherless tried first
+- Keep it last in `AI_PROVIDER_PRIORITY` when you want AIML + Featherless to run first
 
 For the hackathon submission, this lets you clearly disclose which provider is active while keeping the app provider-agnostic.
 
@@ -325,7 +363,7 @@ curl -X POST http://localhost:3000/api/analyze \
 ### Tech Stack
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS v4
 - **Backend:** Next.js API Routes (Node.js runtime)
-- **LLM:** Gemini primary, Featherless open-source fallback/helper
+- **LLM:** Gemini via AI/ML API (primary) + Featherless parallel pass, with direct Gemini optional fallback
 - **Speech-to-Text:** Speechmatics batch transcription API
 - **Alerts:** Resend email API with threshold-based escalation
 - **PDF/DOCX Parsing:** pdfjs-dist, mammoth
@@ -392,7 +430,7 @@ This scans staged files for common API key patterns and warns you before commit.
 
 ### Data Handling
 
-- Contract text is sent to Gemini first, Featherless second, or Gemini last depending on configured provider availability
+- Contract text is sent to Gemini via AI/ML API and Featherless in parallel when configured, with direct Gemini as an optional fallback
 - Speechmatics audio is sent to Speechmatics for transcription
 - Resend alerts only include summary highlights (not full contract text)
 - No data is permanently stored on the server
@@ -411,7 +449,7 @@ This scans staged files for common API key patterns and warns you before commit.
 ### Featherless is skipped or not visible
 - Confirm `FEATHERLESS_API_KEY` and `FEATHERLESS_MODEL` are set
 - Keep `FEATHERLESS_BASE_URL=https://api.featherless.ai/v1`
-- Check the dashboard/report provider trail; Featherless runs after Gemini by default and before Gemini
+- Check the dashboard/report provider trail; Featherless runs in parallel when configured
 - Use `FEATHERLESS_FALLBACK_MODELS=model_a,model_b` to try backup open-source models
 
 ### PDF extraction fails
@@ -442,7 +480,7 @@ This scans staged files for common API key patterns and warns you before commit.
 
 ## 📊 Risk Categories
 
-GeminEYE analyzes contracts across these dimensions:
+GeminEYE-V2 analyzes contracts across these dimensions:
 
 | Category | Focus |
 |----------|-------|
@@ -492,7 +530,7 @@ git push origin feature/your-feature
 
 | Link | URL |
 |------|-----|
-| **Live Demo** | [🔗 gemineye-v1.up.railway.app](https://gemineye-v1.up.railway.app) |
+| **Live Demo** | [🔗 gemineye-v2.up.railway.app](https://gemineye-v2.up.railway.app) |
 | **GitHub Repo** | [🔗 github.com/monsiu/gemineye](https://github.com/monsiu/gemineye) |
 | **Issues & Feedback** | [🔗 GitHub Issues](https://github.com/monsiu/GeminEYE/issues) |
 | **API Documentation** | [🔗 docs.aimlapi.com](https://docs.aimlapi.com) |

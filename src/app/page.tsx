@@ -295,7 +295,7 @@ function highlightRiskTerms(value: string) {
 
 function providerDisplayName(provider?: ProviderName | null) {
   if (provider === "aiml") return "Gemini";
-  if (provider === "featherless") return "Featherless gap-fill";
+  if (provider === "featherless") return "Featherless parallel pass";
   if (provider === "gemini") return "Gemini direct";
   return "Configured AI provider";
 }
@@ -464,7 +464,7 @@ function buildReportHtml(input: {
     : "Featherless did not return a valid comparison result for this pass.";
   const noGapCopy = featherlessParticipated
     ? "Featherless checked the contract and did not surface an extra clause beyond Gemini."
-    : "Featherless was not available for a gap-fill comparison on this pass.";
+    : "Featherless was not available for a parallel comparison on this pass.";
 
   const comparisonSection = providerResultCards.length > 0
     ? `
@@ -472,7 +472,7 @@ function buildReportHtml(input: {
         <div class="section-header">
           <div>
             <h2>Provider cross-check</h2>
-            <p>Gemini leads the review, Featherless runs in parallel as the gap-filler, and the combined score reflects both passes.</p>
+            <p>Gemini and Featherless run in parallel, and GeminEYE-V2 consolidates scores and findings across both passes.</p>
           </div>
           <span class="${overallRiskToneClass}">${escapeHtml(
             comparison?.consolidatedScore === null || comparison?.consolidatedScore === undefined
@@ -514,7 +514,7 @@ function buildReportHtml(input: {
             : `<p>${escapeHtml(noAgreementCopy)}</p>`}
         </div>
         <div class="section-body" style="margin-top: 12px;">
-          <p class="label">Featherless gap-fill</p>
+          <p class="label">Featherless parallel pass</p>
           ${featherlessGapClauses.length > 0
             ? `<ul style="margin: 0; padding-left: 18px;">${featherlessGapClauses
                 .map(
@@ -537,7 +537,7 @@ function buildReportHtml(input: {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(title)} - GeminEYE Report</title>
+    <title>${escapeHtml(title)} - GeminEYE-V2 Report</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -1125,7 +1125,7 @@ function buildReportHtml(input: {
         <div class="brand">
           <div class="brand-mark">${REPORT_LOGO}</div>
           <div>
-            <div style="font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted);">GeminEYE report</div>
+            <div style="font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:var(--muted);">GeminEYE-V2 report</div>
             <div style="font-size:15px; color:var(--ink); font-weight:600;">AI contract risk review</div>
           </div>
         </div>
@@ -1256,13 +1256,13 @@ function buildReportHtml(input: {
         <div class="section-header">
           <div>
             <h2>Provider and integration trail</h2>
-            <p>Gemini leads the review and Featherless fills in gaps Gemini may miss, with voice intake and alerting shown for traceability.</p>
+            <p>Gemini and Featherless run in parallel, with voice intake and alerting shown for traceability.</p>
           </div>
           <span class="badge">${escapeHtml(providerName)}</span>
         </div>
         <div class="section-body">
-          <p><strong>Provider strategy:</strong> Gemini first, Featherless adds coverage when Gemini misses something.</p>
-          <p><strong>Featherless role:</strong> open-source gap-filler for missed details, alternate phrasing, and second-pass coverage.</p>
+          <p><strong>Provider strategy:</strong> Gemini + Featherless run in parallel and GeminEYE-V2 consolidates scores and findings.</p>
+          <p><strong>Featherless role:</strong> parallel open-source pass for cross-checking missed details and alternate phrasing.</p>
           <p><strong>Speechmatics role:</strong> audio upload transcription into contract text when used for intake.</p>
           <p><strong>Resend role:</strong> threshold-based email alerts for high-risk scores.</p>
           <pre>${escapeHtml(attemptSummary)}</pre>
@@ -1270,7 +1270,7 @@ function buildReportHtml(input: {
       </section>
 
       <div class="footer">
-        GeminEYE is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions. Provider stack: Gemini-first analysis with Featherless gap-filling, Speechmatics transcription, and Resend alerts.
+        GeminEYE-V2 is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions. Provider stack: Gemini + Featherless parallel analysis with consolidated scoring, Speechmatics transcription, and Resend alerts.
       </div>
     </main>
     <script>
@@ -1504,7 +1504,7 @@ export default function Home() {
     : "Featherless did not return a valid comparison result for this pass.";
   const noGapCopy = featherlessParticipated
     ? "Featherless checked the contract and did not surface an extra clause beyond Gemini."
-    : "Featherless was not available for a gap-fill comparison on this pass.";
+    : "Featherless was not available for a parallel comparison on this pass.";
 
   const overallRiskMeta = (() => {
     const score = Number(memo.overallRiskScore);
@@ -2246,17 +2246,17 @@ export default function Home() {
               <h2 className="flex items-center gap-2 font-serif text-2xl font-semibold tracking-tight text-muted">
                 <span className="text-xl leading-none">🕵️⚖️</span>
                 <span>
-                  GeminEYE
+                  GeminEYE-V2
                 </span>
               </h2>
               <h1 className="font-serif text-3xl leading-tight text-ink sm:text-4xl md:text-5xl">
                 Review contracts with confidence.
               </h1>
               <p className="max-w-xl text-base text-muted">
-                Upload a PDF or DOCX, paste contract text, or transcribe audio with Speechmatics. GeminEYE turns dense agreements into a concise, evidence-backed risk memo with Gemini leading the review while Featherless runs in parallel to fill gaps and cross-check scoring.
+                Upload a PDF or DOCX, paste contract text, or transcribe audio with Speechmatics. GeminEYE-V2 turns dense agreements into a concise, evidence-backed risk memo with Gemini + Featherless running in parallel and consolidated scores and findings.
               </p>
               <p className="max-w-xl text-sm text-muted">
-                GeminEYE is provided for informational support only and does not replace legal advice. Review the output with a qualified professional before using it in business or legal decisions.
+                GeminEYE-V2 is provided for informational support only and does not replace legal advice. Review the output with a qualified professional before using it in business or legal decisions.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <button
@@ -2389,7 +2389,7 @@ export default function Home() {
                       </span>
                       <span
                         className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.featherless)}`}
-                        title={`Featherless parallel gap-fill: ${providerModelLabel("featherless")}`}
+                        title={`Featherless parallel pass: ${providerModelLabel("featherless")}`}
                       >
                         Featherless
                       </span>
@@ -2572,7 +2572,7 @@ export default function Home() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted">
-                  GeminEYE memo
+                  GeminEYE-V2 memo
                 </p>
                 <h2 className="text-base font-semibold text-ink">
                   Investigator memo
@@ -2813,7 +2813,7 @@ export default function Home() {
 
                   <div className="mt-4 grid gap-3">
                     <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                      Featherless gap-fill
+                      Featherless parallel pass
                     </h4>
                     <div className="rounded-2xl border border-line bg-white p-4">
                       <div className="flex items-start justify-between gap-3">
@@ -2846,7 +2846,7 @@ export default function Home() {
         </section>
 
         <p className="px-1 text-center text-[11px] leading-5 text-muted wrap-break-word">
-          GeminEYE provides informational contract review support only and does not provide legal advice.
+          GeminEYE-V2 provides informational contract review support only and does not provide legal advice.
           It should not be used as a substitute for a qualified attorney or formal legal review.
         </p>
       </main>

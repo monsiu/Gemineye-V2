@@ -149,7 +149,7 @@ function scoreMeta(score?: number | null) {
 
 function providerDisplayName(provider?: ProviderName | null) {
   if (provider === "aiml") return "Gemini";
-  if (provider === "featherless") return "Featherless gap-fill";
+  if (provider === "featherless") return "Featherless parallel pass";
   if (provider === "gemini") return "Gemini direct";
   return "Provider not recorded";
 }
@@ -256,7 +256,7 @@ const ReportCard = memo(function ReportCard({ report, onDownload, onRemove, badg
     : "Featherless did not return a valid comparison result for this pass.";
   const noGapCopy = featherlessParticipated
     ? "Featherless checked the contract and did not surface an extra clause beyond Gemini."
-    : "Featherless was not available for a gap-fill comparison on this pass.";
+    : "Featherless was not available for a parallel comparison on this pass.";
 
   return (
     <div className="rounded-3xl border border-line bg-panel p-6">

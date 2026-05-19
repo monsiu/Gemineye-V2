@@ -77,7 +77,7 @@ export function GET() {
           model: aiMlApiModel || undefined,
         },
         featherless: {
-          label: "Featherless gap-fill",
+          label: "Featherless parallel pass",
           configured: hasFeatherlessConfig,
           model: featherlessModel || featherlessFallbackModels[0] || undefined,
           fallbackModels: featherlessFallbackModels,
