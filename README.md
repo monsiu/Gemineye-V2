@@ -167,15 +167,16 @@ For the hackathon submission, this lets you clearly disclose which provider is a
 
 #### Getting API Keys
 
-1. **AI/ML API**
+1. **Gemini**
+   - Create a Google Cloud project
+   - Enable Generative Language API
+   - Create an API key from Credentials
+   
+2. **AI/ML API**
    - Sign up at [aimlapi.com](https://aimlapi.com)
    - Go to dashboard → Generate API Key
    - Set model to `google/gemini-3-1-pro-preview`
 
-2. **Gemini (optional fallback)**
-   - Create a Google Cloud project
-   - Enable Generative Language API
-   - Create an API key from Credentials
 
 3. **Featherless (optional open-source models)**
   - Create an account at [featherless.ai](https://featherless.ai)
