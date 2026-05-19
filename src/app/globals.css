@@ -1,0 +1,380 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4efe8;
+  --foreground: #1c1a18;
+  --ink: #1c1a18;
+  --muted: #6a5f55;
+  --panel: #fffdf9;
+  --panel-strong: #efe7dc;
+  --line: #e1d6c8;
+  --accent: #0f766e;
+  --accent-strong: #0b5d56;
+  --signal: #b45309;
+  --accent-muted: color-mix(in srgb, #0f766e 24%, var(--panel) 76%);
+  --accent-muted-strong: color-mix(in srgb, #0f766e 36%, var(--panel) 64%);
+  --accent-progress: color-mix(in srgb, #0f766e 40%, var(--panel) 60%);
+}
+
+html[data-theme="dark"] {
+  --background: #0f1418;
+  --foreground: #f4efe8;
+  --ink: #f8f3ec;
+  --muted: #b6aa9e;
+  --panel: #151d22;
+  --panel-strong: #1d2830;
+  --line: #31404a;
+  --accent: #2aa198;
+  --accent-strong: #4bc7bd;
+  --signal: #f59e0b;
+  --accent-muted: color-mix(in srgb, #4bc7bd 30%, var(--panel) 70%);
+  --accent-muted-strong: color-mix(in srgb, #4bc7bd 44%, var(--panel) 56%);
+  --accent-progress: color-mix(in srgb, #4bc7bd 48%, var(--panel) 52%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-signal: var(--signal);
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-editorial);
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(42, 161, 152, 0.16), transparent 35%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.12), transparent 32%),
+    linear-gradient(180deg, var(--background) 0%, color-mix(in srgb, var(--background) 88%, #000 12%) 100%);
+  color: var(--foreground);
+  font-family: var(--font-ui), "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  transition: background 280ms ease, color 220ms ease;
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at top left, rgba(42, 161, 152, 0.24), transparent 32%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 30%),
+    linear-gradient(180deg, #0f1418 0%, #0b1014 100%);
+}
+
+.paper-hero {
+  background: radial-gradient(
+      circle at top left,
+      rgba(180, 83, 9, 0.12),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(15, 118, 110, 0.16),
+      transparent 50%
+    ),
+    linear-gradient(135deg, #f8f3ec 0%, #f4efe8 100%);
+  transition: background 280ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+html[data-theme="dark"] .paper-hero {
+  background:
+    radial-gradient(circle at top left, rgba(42, 161, 152, 0.22), transparent 36%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 32%),
+    linear-gradient(135deg, rgba(21, 29, 34, 0.96) 0%, rgba(13, 18, 22, 0.98) 100%);
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: var(--panel) !important;
+}
+
+html[data-theme="dark"] .bg-panel {
+  background-color: var(--panel) !important;
+}
+
+html[data-theme="dark"] .bg-panel-strong {
+  background-color: var(--panel-strong) !important;
+}
+
+html[data-theme="dark"] .border-line {
+  border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .text-ink {
+  color: var(--ink) !important;
+}
+
+html[data-theme="dark"] .text-muted {
+  color: var(--muted) !important;
+}
+
+html[data-theme="dark"] .bg-background {
+  background-color: var(--background) !important;
+}
+
+html[data-theme="dark"] .soft-shadow {
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.38);
+}
+
+html[data-theme] {
+  color-scheme: dark light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, var(--panel) 72%);
+  color: var(--ink);
+}
+
+:where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-strong) 72%, var(--panel) 28%);
+  outline-offset: 2px;
+}
+
+:where(button, a, input, textarea, select, summary):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Extra small screens (<= 360px) adjustments to prevent overflow */
+@media (max-width: 360px) {
+  .paper-hero { padding: 12px !important; }
+  main { padding-left: 8px !important; padding-right: 8px !important; }
+  .btn-inverse, .button-pop, .rounded-full { padding-left: 8px !important; padding-right: 8px !important; }
+  h1 { font-size: 1.25rem !important; }
+  .wrap-break-word { word-break: break-word; }
+}
+
+.soft-shadow {
+  box-shadow: 0 30px 70px rgba(40, 31, 22, 0.12);
+}
+
+:where(.bg-white, .bg-panel, .bg-panel-strong, .border-line, .text-ink, .text-muted, .paper-hero, .soft-shadow, .btn-primary, .btn-inverse, .analysis-done-button, input, textarea, select, summary) {
+  transition: background-color 220ms ease, background 220ms ease, color 220ms ease, border-color 220ms ease, box-shadow 220ms ease, opacity 220ms ease, transform 200ms ease;
+}
+
+.rise-in {
+  animation: rise-in 900ms ease-out both;
+}
+
+@keyframes rise-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Button hover pop effect utilities */
+button, a[role="button"], [role="button"] {
+  cursor: pointer;
+}
+
+.button-pop {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out;
+}
+
+.button-pop:disabled,
+.button-pop[aria-disabled="true"] {
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.button-pop:disabled:hover,
+.button-pop[aria-disabled="true"]:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.button-pop:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1), 0 0 0 4px color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+
+.sample-contract-button {
+  background-color: var(--panel);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sample-contract-button:hover {
+  background-color: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #ffffff;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+}
+
+html[data-theme="light"] .sample-contract-button:hover {
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .sample-contract-button {
+  background-color: var(--panel) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-strong) !important;
+}
+
+html[data-theme="dark"] .sample-contract-button:hover {
+  background-color: var(--accent-strong) !important;
+  border-color: var(--accent-strong) !important;
+  color: #151d22 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .rise-in,
+  .button-pop,
+  .gemineye-snackbar {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .button-pop:hover {
+    transform: none;
+  }
+}
+
+html[data-theme="dark"] .button-pop:hover {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 6px color-mix(in srgb, var(--color-accent-strong) 34%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent-strong) 56%, var(--line));
+}
+
+html,
+body,
+.paper-hero,
+.soft-shadow,
+.bg-white,
+.bg-panel,
+.bg-panel-strong,
+.btn-primary,
+.btn-inverse,
+.analysis-done-button {
+  backface-visibility: hidden;
+}
+
+/* Primary button that uses a muted, theme-aware accent background to blend with page */
+.btn-primary {
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--panel) 80%);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, var(--line));
+}
+
+/* Inverse button: dark background in light mode, theme-aware hover that
+   lightens in light mode and darkens subtly in dark mode. Used for the
+   high-contrast "Run analysis" action so hover behavior matches themes. */
+.btn-inverse {
+  background: var(--ink);
+  color: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, var(--line));
+  transition: background 160ms ease-out, color 160ms ease-out, border-color 160ms ease-out, box-shadow 160ms ease-out, transform 160ms ease-out;
+}
+
+/* Light theme: when the button is dark, hover should make it a lighter shade */
+html[data-theme="light"] .btn-inverse:hover {
+  background: color-mix(in srgb, var(--panel) 82%, var(--ink) 18%);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 24%, var(--line));
+  box-shadow: 0 10px 26px rgba(0,0,0,0.08);
+}
+
+/* Dark theme: make the inverse button hover to white for stronger contrast */
+html[data-theme="dark"] .btn-inverse {
+  background: color-mix(in srgb, var(--color-accent-strong) 28%, var(--panel) 72%);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--color-accent-strong) 44%, var(--line));
+}
+
+html[data-theme="dark"] .btn-inverse:hover {
+  background: #fffdf9;
+  color: #1c1a18;
+  border-color: #fffdf9;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.36);
+}
+
+.btn-primary.button-pop:hover {
+  background: color-mix(in srgb, var(--color-accent) 30%, var(--panel) 70%);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--color-accent) 44%, var(--line));
+}
+
+html[data-theme="dark"] .btn-primary.button-pop:hover,
+html[data-theme="dark"] .btn-inverse:hover,
+html[data-theme="dark"] .analysis-done-button:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+
+html[data-theme="dark"] .btn-primary {
+  background: color-mix(in srgb, var(--color-accent-strong) 28%, var(--panel) 72%);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--color-accent-strong) 44%, var(--line));
+}
+
+html[data-theme="dark"] .btn-primary.button-pop:hover {
+  background: color-mix(in srgb, var(--color-accent-strong) 38%, var(--panel) 62%);
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--color-accent-strong) 58%, var(--line));
+}
+
+html[data-theme="dark"] .analysis-done-button {
+  background: #fffdf9;
+  color: #1c1a18;
+  border-color: #fffdf9;
+}
+
+.analysis-done-button:disabled,
+.analysis-done-button[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.analysis-done-button:disabled:hover,
+.analysis-done-button[aria-disabled="true"]:hover {
+  cursor: not-allowed;
+}
+
+/* Progress fill that respects muted accent */
+.bg-accent-progress {
+  background: var(--accent-progress) !important;
+}
+
+/* Outline on hover for all button-like elements that don't use .button-pop */
+:is(button, a[role="button"], [role="button"]):not(.button-pop):hover {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent) 14%, transparent), 0 6px 18px rgba(0, 0, 0, 0.06);
+  border-color: var(--accent);
+  color: var(--accent);
+  transition: box-shadow 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+}
+
+html[data-theme="dark"] :is(button, a[role="button"], [role="button"]):not(.button-pop):hover {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent-strong) 32%, transparent), 0 8px 26px rgba(0, 0, 0, 0.36);
+  border-color: color-mix(in srgb, var(--color-accent-strong) 56%, var(--line));
+  color: var(--accent-strong);
+}
+
+/* keyboard focus-visible for accessibility */
+:is(button, a[role="button"], [role="button"]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent-strong) 62%, transparent);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent-strong) 22%, transparent);
+}
