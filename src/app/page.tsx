@@ -1687,7 +1687,7 @@ export default function Home() {
           // Re-add cached analyses back to the dashboard when the report is opened again.
           if (!resolvedFallback) {
             saveReportToStorage({
-              id: `${Date.now()}`,
+              id: createReportId(),
               title: resolvedContractTitle,
               score:
                 resolvedMemo.overallRiskScore === undefined || resolvedMemo.overallRiskScore === null
@@ -1837,7 +1837,7 @@ export default function Home() {
       // Do not persist fallback/demo reports to the dashboard storage
       if (!resolvedFallback) {
         saveReportToStorage({
-          id: `${Date.now()}`,
+          id: createReportId(),
           title: resolvedContractTitle,
           score:
             resolvedMemo.overallRiskScore === undefined || resolvedMemo.overallRiskScore === null
@@ -1920,6 +1920,13 @@ export default function Home() {
       // eslint-disable-next-line no-console
       console.warn("Failed to save report to storage", e);
     }
+  }
+
+  function createReportId() {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
   function saveSecurityEvent(event: Omit<SecurityEvent, "id" | "createdAt">) {

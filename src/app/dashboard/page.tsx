@@ -120,6 +120,32 @@ function normalizeProviderLabel(label?: string | null, provider?: ProviderName |
     .replace(/Gemini API/gi, "Gemini direct");
 }
 
+function createReportId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeStoredReports(reports: SavedReport[]) {
+  const seen = new Set<string>();
+  let changed = false;
+
+  const normalized = reports.map((report) => {
+    const currentId = typeof report.id === "string" ? report.id : "";
+    if (!currentId || seen.has(currentId)) {
+      const nextId = createReportId();
+      seen.add(nextId);
+      changed = true;
+      return { ...report, id: nextId };
+    }
+    seen.add(currentId);
+    return report;
+  });
+
+  return { normalized, changed };
+}
+
 export default function DashboardPage() {
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
@@ -142,7 +168,11 @@ export default function DashboardPage() {
     try {
       const raw = localStorage.getItem("gemineye_reports") || "[]";
       const arr = JSON.parse(raw) as SavedReport[];
-      setReports(arr);
+      const { normalized, changed } = normalizeStoredReports(arr);
+      setReports(normalized);
+      if (changed) {
+        persistReports(normalized);
+      }
     } catch (e) {
       setReports([]);
     }
