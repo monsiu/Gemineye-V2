@@ -1,5 +1,18 @@
 import { memo } from "react";
 
+type ProviderName = "aiml" | "featherless" | "gemini";
+type IntakeSource = "paste" | "document" | "speechmatics" | "sample";
+
+type AlertStatus = {
+  provider: "resend";
+  status: "sent" | "skipped" | "error";
+  threshold: number;
+  score?: number;
+  recipients?: number;
+  reason?: string;
+  id?: string;
+};
+
 type SavedReport = {
   id: string;
   title: string;
@@ -14,6 +27,11 @@ type SavedReport = {
     recommendation: string;
   }>;
   html: string;
+  provider?: ProviderName | null;
+  providerLabel?: string | null;
+  providerModel?: string | null;
+  alertStatus?: AlertStatus | null;
+  intakeSource?: IntakeSource;
 };
 
 interface ReportCardProps {
@@ -75,6 +93,27 @@ function scoreMeta(score?: number | null) {
     fill: "bg-emerald-500",
     percent: Math.min(100, Math.max(0, (numeric / 10) * 100)),
   };
+}
+
+function providerDisplayName(provider?: ProviderName | null) {
+  if (provider === "aiml") return "AI/ML API Gemini";
+  if (provider === "featherless") return "Featherless open-source";
+  if (provider === "gemini") return "Gemini API";
+  return "Provider not recorded";
+}
+
+function intakeSourceLabel(source?: IntakeSource) {
+  if (source === "speechmatics") return "Speechmatics intake";
+  if (source === "document") return "Document upload";
+  if (source === "sample") return "Sample";
+  return "Pasted text";
+}
+
+function alertStatusLabel(status?: AlertStatus | null) {
+  if (!status) return "Resend not recorded";
+  if (status.status === "sent") return "Resend sent";
+  if (status.status === "error") return "Resend failed";
+  return "Resend skipped";
 }
 
 function RiskIcon({ risk }: { risk: "Low" | "Medium" | "High" }) {
@@ -160,6 +199,20 @@ const ReportCard = memo(function ReportCard({ report, onDownload, onRemove, badg
             {report.findings.length} findings
           </span>
         )}
+        <span className="inline-flex rounded-full bg-panel-strong px-3 py-1 text-xs font-semibold text-ink">
+          {report.providerLabel || providerDisplayName(report.provider)}
+        </span>
+        {report.providerModel ? (
+          <span className="inline-flex max-w-full rounded-full bg-panel-strong px-3 py-1 text-xs font-semibold text-ink wrap-break-word">
+            {report.providerModel}
+          </span>
+        ) : null}
+        <span className="inline-flex rounded-full bg-panel-strong px-3 py-1 text-xs font-semibold text-ink">
+          {intakeSourceLabel(report.intakeSource)}
+        </span>
+        <span className="inline-flex rounded-full bg-panel-strong px-3 py-1 text-xs font-semibold text-ink">
+          {alertStatusLabel(report.alertStatus)}
+        </span>
       </div>
 
       {report.score !== null && report.score !== undefined && (

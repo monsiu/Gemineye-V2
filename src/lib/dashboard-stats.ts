@@ -4,6 +4,10 @@ export type SavedReport = {
   score?: number | null;
   label: string;
   createdAt: string;
+  provider?: "aiml" | "featherless" | "gemini" | null;
+  providerLabel?: string | null;
+  intakeSource?: "paste" | "document" | "speechmatics" | "sample";
+  alertStatus?: { status: "sent" | "skipped" | "error" } | null;
   findings?: Array<{
     id: string;
     risk: "Low" | "Medium" | "High";
@@ -20,6 +24,8 @@ export type SecurityEvent = {
   reason: string;
   contractTitle: string;
   createdAt: string;
+  provider?: "aiml" | "featherless" | "gemini";
+  providerLabel?: string;
 };
 
 export interface DashboardStat {
@@ -47,6 +53,9 @@ export function calculateSecurityStats(events: SecurityEvent[]): DashboardStat[]
 export function calculateDashboardStats(reports: SavedReport[]): DashboardStat[] {
   const total = reports.length;
   const highRisk = reports.filter((report) => (report.label || "").toLowerCase().includes("high")).length;
+  const featherless = reports.filter((report) => report.provider === "featherless").length;
+  const speechmatics = reports.filter((report) => report.intakeSource === "speechmatics").length;
+  const resendSent = reports.filter((report) => report.alertStatus?.status === "sent").length;
   const averageScore =
     reports.length === 0
       ? null
@@ -56,5 +65,8 @@ export function calculateDashboardStats(reports: SavedReport[]): DashboardStat[]
     { label: "Saved reports", value: total.toString(), helper: total === 1 ? "One report stored" : "Reports stored locally" },
     { label: "High risk", value: highRisk.toString(), helper: highRisk === 1 ? "Report flagged as high risk" : "Reports flagged as high risk" },
     { label: "Average score", value: averageScore === null ? "-" : `${averageScore.toFixed(1)} / 10`, helper: averageScore === null ? "No score yet" : "Across saved reports" },
+    { label: "Featherless runs", value: featherless.toString(), helper: featherless === 1 ? "One open-source model report" : "Open-source model reports" },
+    { label: "Speechmatics intake", value: speechmatics.toString(), helper: speechmatics === 1 ? "One audio-sourced report" : "Audio-sourced reports" },
+    { label: "Resend sent", value: resendSent.toString(), helper: resendSent === 1 ? "One alert delivered" : "Alerts delivered" },
   ];
 }

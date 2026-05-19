@@ -29,6 +29,8 @@ type SecurityEvent = {
   contractTitle: string;
   createdAt: string;
   blockedTerms?: string[];
+  provider?: ProviderName;
+  providerLabel?: string;
 };
 
 type ProviderStatus = {
@@ -38,6 +40,23 @@ type ProviderStatus = {
 };
 
 type ProviderName = "aiml" | "featherless" | "gemini";
+
+type IntakeSource = "paste" | "document" | "speechmatics" | "sample";
+
+type ProviderAttempt = {
+  provider: ProviderName;
+  label: string;
+  ok: boolean;
+  model?: string;
+  error?: string;
+};
+
+type ProviderDetail = {
+  label: string;
+  configured: boolean;
+  model?: string;
+  fallbackModels?: string[];
+};
 
 type IntegrationStatus = {
   speechmatics: boolean;
@@ -57,6 +76,8 @@ type AlertStatus = {
 type StatusPayload = {
   configured?: boolean;
   providers?: Partial<ProviderStatus>;
+  providerPriority?: ProviderName[];
+  providerDetails?: Partial<Record<ProviderName, ProviderDetail>>;
   integrations?: Partial<IntegrationStatus>;
   alerting?: { threshold?: number };
 };
@@ -213,14 +234,55 @@ function highlightRiskTerms(value: string) {
     .replace(/\blow risk\b/gi, '<span class="risk-pill risk-pill-low">$&</span>');
 }
 
+function providerDisplayName(provider?: ProviderName | null) {
+  if (provider === "aiml") return "AI/ML API Gemini";
+  if (provider === "featherless") return "Featherless open-source";
+  if (provider === "gemini") return "Gemini API";
+  return "Configured AI provider";
+}
+
+function intakeSourceLabel(source?: IntakeSource) {
+  if (source === "speechmatics") return "Speechmatics audio transcription";
+  if (source === "document") return "Document upload extraction";
+  if (source === "sample") return "Sample contract";
+  return "Pasted contract text";
+}
+
+function formatProviderPriority(priority?: ProviderName[]) {
+  const ordered = priority && priority.length > 0 ? priority : ["aiml", "featherless", "gemini"] as ProviderName[];
+  return ordered.map(providerDisplayName).join(" -> ");
+}
+
 function buildReportHtml(input: {
   contractTitle: string;
   contractText: string;
   memo: MemoPayload;
   fallback: boolean;
+  provider?: ProviderName | null;
+  providerLabel?: string | null;
+  providerModel?: string | null;
+  providerPriority?: ProviderName[];
+  attempts?: ProviderAttempt[];
+  alert?: AlertStatus | null;
+  intakeSource?: IntakeSource;
 }) {
   const generatedAt = formatDateTime(new Date());
   const title = input.contractTitle.trim() || "Contract Review";
+  const providerName = input.providerLabel || providerDisplayName(input.provider);
+  const providerModel = input.providerModel?.trim() || "Model not reported";
+  const priorityLabel = formatProviderPriority(input.providerPriority);
+  const intakeLabel = intakeSourceLabel(input.intakeSource);
+  const alertLabel = input.alert
+    ? `Resend ${input.alert.status}${typeof input.alert.threshold === "number" ? ` at ${input.alert.threshold.toFixed(1)} / 10` : ""}`
+    : "Resend not triggered for this export";
+  const attemptSummary =
+    input.attempts && input.attempts.length > 0
+      ? input.attempts
+          .map((attempt) =>
+            `${attempt.label}${attempt.model ? ` (${attempt.model})` : ""}: ${attempt.ok ? "success" : `failed${attempt.error ? ` - ${attempt.error}` : ""}`}`
+          )
+          .join("\n")
+      : "No provider attempts were reported.";
   const riskScore =
     input.memo.overallRiskScore === undefined || input.memo.overallRiskScore === null
       ? "-"
@@ -534,6 +596,7 @@ function buildReportHtml(input: {
         font-size: 18px;
         line-height: 1.4;
         color: var(--ink);
+        overflow-wrap: anywhere;
       }
 
       .section {
@@ -894,8 +957,8 @@ function buildReportHtml(input: {
         <h1>${escapeHtml(title)}</h1>
         <div class="subtitle">${escapeHtml(
           input.fallback
-            ? "This report captures the Gemini response from the fallback analysis mode. Review it as a working draft and verify the contract text before relying on it."
-            : "This report captures the Gemini response for the analyzed contract, formatted in the same editorial style as the app and ready to share or print."
+            ? "This report captures the demo fallback memo shown after every configured provider attempt failed. Review it as a working draft and verify the contract text before relying on it."
+            : `This report captures a ${providerName} contract-risk memo, formatted in the same editorial style as the app and ready to share or print.`
         )}</div>
 
         <div class="meta-grid">
@@ -914,6 +977,22 @@ function buildReportHtml(input: {
           <div class="meta-card">
             <span class="label">Contract title</span>
             <div class="value">${escapeHtml(title)}</div>
+          </div>
+          <div class="meta-card">
+            <span class="label">AI provider</span>
+            <div class="value">${escapeHtml(providerName)}</div>
+          </div>
+          <div class="meta-card">
+            <span class="label">Model</span>
+            <div class="value">${escapeHtml(providerModel)}</div>
+          </div>
+          <div class="meta-card">
+            <span class="label">Intake</span>
+            <div class="value">${escapeHtml(intakeLabel)}</div>
+          </div>
+          <div class="meta-card">
+            <span class="label">Alerting</span>
+            <div class="value">${escapeHtml(alertLabel)}</div>
           </div>
         </div>
       </section>
@@ -957,7 +1036,7 @@ function buildReportHtml(input: {
         <div class="section-header">
           <div>
             <h2>Narrative</h2>
-            <p>Gemini's high-level explanation of the contract review.</p>
+            <p>High-level explanation returned by ${escapeHtml(providerName)}.</p>
           </div>
           <span class="badge">${escapeHtml(riskLabel(input.memo.overallRiskScore))}</span>
         </div>
@@ -968,7 +1047,7 @@ function buildReportHtml(input: {
         <div class="section-header">
           <div>
             <h2>Summary</h2>
-            <p>Condensed takeaways pulled from the Gemini reply.</p>
+            <p>Condensed takeaways pulled from the provider response.</p>
           </div>
         </div>
         <div class="section-body">
@@ -996,8 +1075,25 @@ function buildReportHtml(input: {
         <div class="contract-text">${contractText}</div>
       </section>
 
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Provider and integration trail</h2>
+            <p>Hackathon stack disclosure for reproducible analysis, open-source model fallback, voice intake, and alerting.</p>
+          </div>
+          <span class="badge">${escapeHtml(providerName)}</span>
+        </div>
+        <div class="section-body">
+          <p><strong>Provider priority:</strong> ${escapeHtml(priorityLabel)}</p>
+          <p><strong>Featherless role:</strong> open-source model fallback/helper after AI/ML API and before direct Gemini.</p>
+          <p><strong>Speechmatics role:</strong> audio upload transcription into contract text when used for intake.</p>
+          <p><strong>Resend role:</strong> threshold-based email alerts for high-risk scores.</p>
+          <pre>${escapeHtml(attemptSummary)}</pre>
+        </div>
+      </section>
+
       <div class="footer">
-        GeminEYE is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions.
+        GeminEYE is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions. Provider stack: AI/ML API primary, Featherless open-source fallback/helper, Gemini final fallback, Speechmatics transcription, and Resend alerts.
       </div>
     </main>
     <script>
@@ -1055,6 +1151,12 @@ export default function Home() {
   const [alertThreshold, setAlertThreshold] = useState<number | null>(null);
   const [alertStatus, setAlertStatus] = useState<AlertStatus | null>(null);
   const [analysisProvider, setAnalysisProvider] = useState<ProviderName | null>(null);
+  const [analysisProviderLabel, setAnalysisProviderLabel] = useState<string | null>(null);
+  const [analysisProviderModel, setAnalysisProviderModel] = useState<string | null>(null);
+  const [providerPriority, setProviderPriority] = useState<ProviderName[]>(["aiml", "featherless", "gemini"]);
+  const [providerDetails, setProviderDetails] = useState<Partial<Record<ProviderName, ProviderDetail>>>({});
+  const [providerAttempts, setProviderAttempts] = useState<ProviderAttempt[]>([]);
+  const [intakeSource, setIntakeSource] = useState<IntakeSource>("paste");
   const [transcriptionStatus, setTranscriptionStatus] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [activeReviewArea, setActiveReviewArea] = useState<string | null>(null);
@@ -1098,6 +1200,8 @@ export default function Home() {
             gemini: Boolean(data.providers?.gemini),
             featherless: Boolean(data.providers?.featherless),
           });
+          setProviderPriority(data.providerPriority && data.providerPriority.length > 0 ? data.providerPriority : ["aiml", "featherless", "gemini"]);
+          setProviderDetails(data.providerDetails ?? {});
           setIntegrationStatus({
             speechmatics: Boolean(data.integrations?.speechmatics),
             resend: Boolean(data.integrations?.resend),
@@ -1216,11 +1320,9 @@ export default function Home() {
     return "Skipped";
   };
 
-  const providerLabel = (provider: ProviderName) => {
-    if (provider === "aiml") return "Gemini";
-    if (provider === "featherless") return "Featherless";
-    return "Gemini";
-  };
+  const activeProviderLabel = analysisProviderLabel || providerDisplayName(analysisProvider);
+  const providerPriorityLabel = formatProviderPriority(providerPriority);
+  const providerModelLabel = (provider: ProviderName) => providerDetails[provider]?.model || "model pending";
 
   const overallRiskMeta = (() => {
     const score = Number(memo.overallRiskScore);
@@ -1293,6 +1395,10 @@ export default function Home() {
     setIsFallback(false);
     setAlertStatus(null);
     setAnalysisProvider(null);
+    setAnalysisProviderLabel(null);
+    setAnalysisProviderModel(null);
+    setProviderAttempts([]);
+    setIntakeSource("paste");
     setTranscriptionStatus(null);
     setIsTranscribing(false);
     setActiveReviewArea(null);
@@ -1311,6 +1417,9 @@ export default function Home() {
     setIsFallback(false);
     setAlertStatus(null);
     setAnalysisProvider(null);
+    setAnalysisProviderLabel(null);
+    setAnalysisProviderModel(null);
+    setProviderAttempts([]);
     setActiveReviewArea(null);
   };
 
@@ -1331,7 +1440,7 @@ export default function Home() {
 
     try {
       // Check cache first (sessionStorage)
-      const cacheKey = `analysis_${contractTitle}_${contractText.substring(0, 100).replace(/[^a-z0-9]/gi, "")}`;
+      const cacheKey = `analysis_${providerPriority.join("_")}_${contractTitle}_${contractText.substring(0, 100).replace(/[^a-z0-9]/gi, "")}`;
       const cached = typeof window !== "undefined" ? sessionStorage.getItem(cacheKey) : null;
       if (cached) {
         const data = JSON.parse(cached) as {
@@ -1341,6 +1450,10 @@ export default function Home() {
           contractTitle?: string;
           alert?: AlertStatus;
           provider?: ProviderName;
+          providerLabel?: string;
+          providerModel?: string;
+          providerPriority?: ProviderName[];
+          attempts?: ProviderAttempt[];
         };
         if (data.memo) {
           const resolvedMemo = data.memo;
@@ -1361,12 +1474,25 @@ export default function Home() {
           } else {
             setAnalysisProvider(null);
           }
+          setAnalysisProviderLabel(data.providerLabel ?? null);
+          setAnalysisProviderModel(data.providerModel ?? null);
+          if (data.providerPriority && data.providerPriority.length > 0) {
+            setProviderPriority(data.providerPriority);
+          }
+          setProviderAttempts(data.attempts ?? []);
 
           const generatedReportHtml = buildReportHtml({
             contractTitle: resolvedContractTitle,
             contractText,
             memo: resolvedMemo,
             fallback: resolvedFallback,
+            provider: data.provider ?? null,
+            providerLabel: data.providerLabel ?? null,
+            providerModel: data.providerModel ?? null,
+            providerPriority: data.providerPriority ?? providerPriority,
+            attempts: data.attempts ?? [],
+            alert: data.alert ?? null,
+            intakeSource,
           });
 
           // Re-add cached analyses back to the dashboard when the report is opened again.
@@ -1382,6 +1508,11 @@ export default function Home() {
               createdAt: new Date().toISOString(),
               findings: resolvedMemo.findings,
               html: generatedReportHtml,
+              provider: data.provider ?? null,
+              providerLabel: data.providerLabel ?? providerDisplayName(data.provider),
+              providerModel: data.providerModel ?? null,
+              alertStatus: data.alert ?? null,
+              intakeSource,
             });
           }
 
@@ -1389,6 +1520,8 @@ export default function Home() {
             outcome: resolvedFallback ? "fallback" : "allowed",
             reason: data.error ? data.error : "cached-analysis",
             contractTitle: resolvedContractTitle,
+            provider: data.provider,
+            providerLabel: data.providerLabel,
           });
           securityEventLogged = true;
 
@@ -1451,6 +1584,10 @@ export default function Home() {
         contractTitle?: string;
         alert?: AlertStatus;
         provider?: ProviderName;
+        providerLabel?: string;
+        providerModel?: string;
+        providerPriority?: ProviderName[];
+        attempts?: ProviderAttempt[];
       };
       
       // Cache the result
@@ -1478,6 +1615,12 @@ export default function Home() {
       } else {
         setAnalysisProvider(null);
       }
+      setAnalysisProviderLabel(data.providerLabel ?? null);
+      setAnalysisProviderModel(data.providerModel ?? null);
+      if (data.providerPriority && data.providerPriority.length > 0) {
+        setProviderPriority(data.providerPriority);
+      }
+      setProviderAttempts(data.attempts ?? []);
 
       const resolvedMemo = data.memo ?? memo;
       const resolvedContractTitle = (data.contractTitle?.trim() || contractTitle.trim() || "Contract Review");
@@ -1488,6 +1631,13 @@ export default function Home() {
         contractText,
         memo: resolvedMemo,
         fallback: resolvedFallback,
+        provider: data.provider ?? null,
+        providerLabel: data.providerLabel ?? null,
+        providerModel: data.providerModel ?? null,
+        providerPriority: data.providerPriority ?? providerPriority,
+        attempts: data.attempts ?? [],
+        alert: data.alert ?? null,
+        intakeSource,
       });
 
       // Do not persist fallback/demo reports to the dashboard storage
@@ -1503,6 +1653,11 @@ export default function Home() {
           createdAt: new Date().toISOString(),
           findings: resolvedMemo.findings,
           html: generatedReportHtml,
+          provider: data.provider ?? null,
+          providerLabel: data.providerLabel ?? providerDisplayName(data.provider),
+          providerModel: data.providerModel ?? null,
+          alertStatus: data.alert ?? null,
+          intakeSource,
         });
       }
 
@@ -1510,6 +1665,8 @@ export default function Home() {
         outcome: resolvedFallback ? "fallback" : "allowed",
         reason: data.error ? data.error : "analysis-complete",
         contractTitle: resolvedContractTitle,
+        provider: data.provider,
+        providerLabel: data.providerLabel,
       });
       securityEventLogged = true;
 
@@ -1545,6 +1702,11 @@ export default function Home() {
     createdAt: string;
     findings: SavedFinding[];
     html: string;
+    provider?: ProviderName | null;
+    providerLabel?: string | null;
+    providerModel?: string | null;
+    alertStatus?: AlertStatus | null;
+    intakeSource?: IntakeSource;
   }) {
     try {
       const key = "gemineye_reports";
@@ -1589,6 +1751,13 @@ export default function Home() {
       contractText,
       memo,
       fallback: isFallback,
+      provider: analysisProvider,
+      providerLabel: analysisProviderLabel,
+      providerModel: analysisProviderModel,
+      providerPriority,
+      attempts: providerAttempts,
+      alert: alertStatus,
+      intakeSource,
     });
     const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1646,6 +1815,7 @@ export default function Home() {
 
       const data = (await response.json()) as { text?: string; title?: string };
       setContractText(data.text ?? "");
+      setIntakeSource("document");
       if (data.title) {
         setContractTitle(data.title);
       }
@@ -1691,6 +1861,7 @@ export default function Home() {
 
       if (data?.text) {
         setContractText(data.text);
+        setIntakeSource("speechmatics");
         if (!contractTitle.trim()) {
           setContractTitle(file.name.replace(/\.[^/.]+$/, ""));
         }
@@ -1708,6 +1879,7 @@ export default function Home() {
   const loadSampleContract = (sample: typeof SAMPLE_CONTRACTS[0]) => {
     setContractTitle(sample.title);
     setContractText(sample.text);
+    setIntakeSource("sample");
     setFileStatus(null);
     setTranscriptionStatus(null);
     setError(null);
@@ -1721,6 +1893,17 @@ export default function Home() {
     const json = JSON.stringify({
       title: analyzedContractTitle || contractTitle,
       generatedAt: new Date().toISOString(),
+      provider: analysisProvider,
+      providerLabel: analysisProviderLabel,
+      providerModel: analysisProviderModel,
+      providerPriority,
+      providerAttempts,
+      intakeSource,
+      integrations: {
+        speechmatics: integrationStatus.speechmatics,
+        resend: integrationStatus.resend,
+      },
+      alert: alertStatus,
       memo,
     }, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -1748,6 +1931,8 @@ export default function Home() {
         gemini: Boolean(data.providers?.gemini),
         featherless: Boolean(data.providers?.featherless),
       });
+      setProviderPriority(data.providerPriority && data.providerPriority.length > 0 ? data.providerPriority : ["aiml", "featherless", "gemini"]);
+      setProviderDetails(data.providerDetails ?? {});
       setIntegrationStatus({
         speechmatics: Boolean(data.integrations?.speechmatics),
         resend: Boolean(data.integrations?.resend),
@@ -1778,7 +1963,7 @@ export default function Home() {
                 Review contracts with confidence.
               </h1>
               <p className="max-w-xl text-base text-muted">
-                Upload a PDF or DOCX, or paste contract text directly. GeminEYE turns dense agreements into a clear, evidence-backed risk memo by extracting key clauses, scoring the overall picture, and surfacing issues across liability, indemnity, privacy, termination, intellectual property, and venue.
+                Upload a PDF or DOCX, paste contract text, or transcribe audio with Speechmatics. GeminEYE turns dense agreements into a clear, evidence-backed risk memo using AI/ML API first, Featherless open-source models as the fallback/helper layer, Gemini at the end, and Resend alerts for high-risk escalations.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <button
@@ -1903,11 +2088,23 @@ export default function Home() {
                       <span className="text-xs uppercase tracking-[0.2em] text-muted">
                         AI providers
                       </span>
-                      <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.aiml)}`}>
-                        Gemini
+                      <span
+                        className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.aiml)}`}
+                        title={`AI/ML API primary: ${providerModelLabel("aiml")}`}
+                      >
+                        AI/ML API
                       </span>
-                      <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.featherless)}`}>
+                      <span
+                        className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.featherless)}`}
+                        title={`Featherless open-source fallback/helper: ${providerModelLabel("featherless")}`}
+                      >
                         Featherless
+                      </span>
+                      <span
+                        className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.gemini)}`}
+                        title={`Gemini final fallback: ${providerModelLabel("gemini")}`}
+                      >
+                        Gemini
                       </span>
                     </div>
                     <button
@@ -1933,6 +2130,10 @@ export default function Home() {
                         Alert {alertThreshold.toFixed(1)} / 10
                       </span>
                     ) : null}
+                  </div>
+                  <div className="rounded-xl border border-line bg-white px-3 py-2 text-[11px] text-muted">
+                    <span className="font-semibold uppercase tracking-[0.18em] text-ink">Priority</span>{" "}
+                    {providerPriorityLabel}
                   </div>
                 </div>
               </div>
@@ -1997,7 +2198,10 @@ export default function Home() {
                     rows={7}
                     placeholder="Paste contract language or a specific clause..."
                     value={contractText}
-                    onChange={(event) => setContractText(event.target.value)}
+                    onChange={(event) => {
+                      setContractText(event.target.value);
+                      setIntakeSource("paste");
+                    }}
                     className="rounded-xl border border-line bg-white p-3 text-sm text-muted focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </label>
@@ -2088,7 +2292,12 @@ export default function Home() {
                 </span>
                 {analysisProvider ? (
                   <span className="rounded-full border border-line bg-panel px-3 py-1 text-xs font-semibold text-muted">
-                    {providerLabel(analysisProvider)}
+                    {activeProviderLabel}
+                  </span>
+                ) : null}
+                {analysisProviderModel ? (
+                  <span className="rounded-full border border-line bg-panel px-3 py-1 text-xs font-semibold text-muted">
+                    {analysisProviderModel}
                   </span>
                 ) : null}
                 {hasAnalysisResult ? (
@@ -2176,6 +2385,39 @@ export default function Home() {
                 <div className="mt-1 font-normal text-[11px] normal-case text-amber-900">This demo report cannot be saved to the dashboard or downloaded.</div>
               </div>
             ) : null}
+            <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                    Provider route
+                  </span>
+                  <p className="mt-1 text-sm font-medium">
+                    {analysisProvider ? activeProviderLabel : "AI/ML API -> Featherless -> Gemini"}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {analysisProviderModel ? analysisProviderModel : providerPriorityLabel}
+                  </p>
+                </div>
+                <span className="rounded-full border border-line bg-panel px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  {providerAttempts.length > 0 ? `${providerAttempts.length} attempt${providerAttempts.length === 1 ? "" : "s"}` : "Ready"}
+                </span>
+              </div>
+              {providerAttempts.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {providerAttempts.map((attempt, index) => (
+                    <span
+                      key={`${attempt.provider}-${attempt.model ?? "model"}-${index}`}
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                        attempt.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"
+                      }`}
+                      title={attempt.error}
+                    >
+                      {attempt.label}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
               <div className="flex items-center justify-between gap-3">
                 <div>

@@ -1,8 +1,8 @@
 # GeminEYE 🕵️‍♂️📄
 
-**AI-powered contract risk analyzer with voice intake and automated alerts.** Upload PDFs, DOCX files, paste contract text, or transcribe audio via Speechmatics. GeminEYE extracts clauses, scores risk, and delivers structured investigator-style memos with evidence-backed findings. High-risk scores can trigger Resend email alerts.
+**AI-powered contract risk analyzer with voice intake, open-source model fallback, and automated alerts.** Upload PDFs, DOCX files, paste contract text, or transcribe audio via Speechmatics. GeminEYE extracts clauses, scores risk, and delivers structured investigator-style memos with evidence-backed findings. AI/ML API is tried first, Featherless open-source models are tried next, Gemini is the final fallback, and high-risk scores can trigger Resend email alerts.
 
-Built for legal teams, compliance officers, and contract negotiators who need fast, structured contract analysis powered by Gemini and open-source models via Featherless.
+Built for legal teams, compliance officers, and contract negotiators who need fast, structured contract analysis powered by AI/ML API, Featherless open-source models, Gemini fallback, Speechmatics transcription, and Resend alerts.
 
 ## Highlights
 
@@ -11,6 +11,7 @@ Built for legal teams, compliance officers, and contract negotiators who need fa
 - **Risk scoring** - Overall risk score on a 0–10 scale
 - **Speechmatics voice intake** - Batch transcription for uploaded audio files
 - **Resend alerts** - Email escalation when risk scores exceed your threshold
+- **Provider failover** - AI/ML API primary, Featherless open-source fallback/helper, Gemini final fallback
 - **Guardrails and governance** - Prompt-injection detection, moderation, redaction, and rate limiting
 - **Security audit trail** - Local event log for allowed, blocked, fallback, and error outcomes
 
@@ -27,11 +28,18 @@ The AI Agent Olympics Hackathon runs during Milan AI Week and focuses on enterpr
 - **Enterprise Utility** - real contract review workflows for ops, legal, and procurement.
 - **Multimodal Intelligence** - PDF/DOCX ingestion plus Speechmatics audio transcription.
 
+### Featherless challenge fit
+
+- **Domain-specialized:** contract-risk review for liability, indemnity, privacy, termination, IP, and venue.
+- **Async-first workflow:** Speechmatics batch jobs, background-style provider failover, local audit trails, and Resend event alerts for high-risk scores.
+- **Open-source ready:** MIT license, reproducible prompts, provider priority, and environment-only secrets.
+- **Production-shaped:** typed API routes, guarded inputs, provider attempts, HTML/JSON exports, dashboard auditability, and deployable Next.js runtime.
+
 Deployment is planned for Vultr at the end of the build cycle.
 
 ## Hackathon Disclosure
 
-This project is provider-agnostic. It supports Gemini (direct or via AI/ML API) and open-source models via Featherless. Speechmatics and Resend are optional integrations enabled through environment variables.
+This project is a domain-specialized contract-risk agent with provider-swappable inference. It tries AI/ML API first, then Featherless open-source models through an OpenAI-compatible API, then direct Gemini. Speechmatics handles async audio transcription, Resend handles event-driven risk alerts, and every report export records the provider/model/intake/alert trail for hackathon judging.
 
 ## Legal Disclaimer
 
@@ -76,7 +84,7 @@ Upload a file (PDF, DOCX, TXT), paste contract language directly in the text are
 GeminEYE extracts and cleans text from documents, removing extra whitespace and normalizing formatting.
 
 ### 3. **AI Analysis**
-The contract is sent to Gemini (direct or via AI/ML API) or to an open-source model via Featherless. The model:
+The contract is routed through the provider chain: AI/ML API first, Featherless open-source models second, and direct Gemini last. The first provider that returns valid memo JSON is used. The model:
 - Identifies high-risk clauses
 - Categorizes findings (liability, indemnity, data privacy, etc.)
 - Scores overall risk (0–10)
@@ -91,6 +99,9 @@ Results are formatted as an investigator-style memo:
 
 ### 5. **Risk Alerts**
 If the overall risk score exceeds your threshold, Resend sends an email alert to the configured recipients.
+
+### 6. **Provider Trail**
+The UI, dashboard, JSON export, HTML report, and Resend email include AI/ML API, Featherless, Gemini, Speechmatics, and Resend status chips so judges can see exactly which route handled the run.
 
 ---
 
@@ -121,14 +132,20 @@ AI_ML_API_BASE_URL=https://api.aimlapi.com
 AI_ML_API_COMPLETIONS_URL=
 AI_ML_API_AUTH_HEADER=Authorization
 AI_ML_API_AUTH_SCHEME=Bearer
+AI_ML_API_MAX_TOKENS=4096
+AI_PROVIDER_PRIORITY=aiml,featherless,gemini
 
 # Gemini fallback (optional)
 GEMINI_API_KEY=your_gemini_key_here
+GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MAX_OUTPUT_TOKENS=2048
 
-# Featherless (optional)
+# Featherless open-source fallback/helper
 FEATHERLESS_API_KEY=your_featherless_key_here
 FEATHERLESS_MODEL=your_featherless_model_id
+FEATHERLESS_FALLBACK_MODELS=
 FEATHERLESS_BASE_URL=https://api.featherless.ai/v1
+FEATHERLESS_MAX_TOKENS=4096
 FEATHERLESS_APP_URL=http://localhost:3000
 FEATHERLESS_APP_TITLE=GeminEYE
 
@@ -148,7 +165,7 @@ RESEND_RISK_THRESHOLD=7.5
 
 ### Provider Swap
 
-Provider priority is: **AI/ML API -> Featherless -> Gemini**. Configure only the provider you want to use, or remove keys for the providers you want to skip.
+Provider priority is: **AI/ML API -> Featherless -> Gemini** by default. The API records every provider attempt and only returns the demo fallback after all configured providers fail. You can override the order with `AI_PROVIDER_PRIORITY=aiml,featherless,gemini`.
 
 To use **AI/ML API**:
 - Keep `AI_ML_API_BASE_URL=https://api.aimlapi.com`
@@ -156,12 +173,13 @@ To use **AI/ML API**:
 
 To use **Featherless** (open-source models):
 - Set `FEATHERLESS_API_KEY`, `FEATHERLESS_MODEL`, and `FEATHERLESS_BASE_URL`
-- Remove `AI_ML_API_KEY` if you want Featherless to be selected first
+- Optionally set `FEATHERLESS_FALLBACK_MODELS` as a comma-separated list for backup open-source model IDs
+- Move `featherless` earlier in `AI_PROVIDER_PRIORITY` only if you want it to run before AI/ML API
 
 To use **direct Gemini API** instead:
-- Point the base URL to the Gemini endpoint
-- Replace the auth header and model settings to match Google’s Gemini API requirements
-- Keep the same analysis UI and memo format so the demo behavior stays the same
+- Set `GEMINI_API_KEY`
+- Optionally set `GEMINI_MODEL` and `GEMINI_MAX_OUTPUT_TOKENS`
+- Keep it last in `AI_PROVIDER_PRIORITY` when you want AI/ML API and Featherless tried first
 
 For the hackathon submission, this lets you clearly disclose which provider is active while keeping the app provider-agnostic.
 
@@ -282,6 +300,13 @@ curl -X POST http://localhost:3000/api/analyze \
   "fallback": false,
   "keyLoaded": true,
   "provider": "featherless",
+  "providerLabel": "Featherless open-source",
+  "providerModel": "your_featherless_model_id",
+  "providerPriority": ["aiml", "featherless", "gemini"],
+  "attempts": [
+    { "provider": "aiml", "label": "AI/ML API Gemini", "ok": false, "model": "google/gemini-3-1-pro-preview" },
+    { "provider": "featherless", "label": "Featherless open-source", "ok": true, "model": "your_featherless_model_id" }
+  ],
   "alert": {
     "provider": "resend",
     "status": "sent",
@@ -300,9 +325,9 @@ curl -X POST http://localhost:3000/api/analyze \
 ### Tech Stack
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS v4
 - **Backend:** Next.js API Routes (Node.js runtime)
-- **LLM:** Gemini (direct or via AI/ML API) and Featherless (open-source models)
+- **LLM:** AI/ML API primary, Featherless open-source fallback/helper, Gemini final fallback
 - **Speech-to-Text:** Speechmatics batch transcription API
-- **Alerts:** Resend email API
+- **Alerts:** Resend email API with threshold-based escalation
 - **PDF/DOCX Parsing:** pdfjs-dist, mammoth
 - **Styling:** CSS custom properties + Tailwind design tokens
 
@@ -367,7 +392,7 @@ This scans staged files for common API key patterns and warns you before commit.
 
 ### Data Handling
 
-- Contract text is sent to AI/ML API, Gemini, or Featherless for processing
+- Contract text is sent to AI/ML API first, Featherless second, or Gemini last depending on configured provider availability
 - Speechmatics audio is sent to Speechmatics for transcription
 - Resend alerts only include summary highlights (not full contract text)
 - No data is permanently stored on the server
@@ -382,6 +407,12 @@ This scans staged files for common API key patterns and warns you before commit.
 - ✅ Verify `AI_ML_API_KEY` and `AI_ML_API_MODEL` are in `.env.local`
 - ✅ Check model ID matches AI/ML API catalog (`google/gemini-3-1-pro-preview`)
 - ✅ Restart `npm run dev` after env changes
+
+### Featherless is skipped or not visible
+- Confirm `FEATHERLESS_API_KEY` and `FEATHERLESS_MODEL` are set
+- Keep `FEATHERLESS_BASE_URL=https://api.featherless.ai/v1`
+- Check the dashboard/report provider trail; Featherless runs after AI/ML API by default and before Gemini
+- Use `FEATHERLESS_FALLBACK_MODELS=model_a,model_b` to try backup open-source models
 
 ### PDF extraction fails
 - ✅ Ensure file is valid and under 10 MB

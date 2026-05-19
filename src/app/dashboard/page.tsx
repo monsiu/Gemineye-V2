@@ -1,12 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import ErrorAlert from "../../components/error-alert";
 import ReportCard from "../../components/report-card";
-import { SkeletonGrid } from "../../components/skeleton-loader";
 import { debounce } from "../../lib/debounce";
 import { calculateDashboardStats, calculateSecurityStats } from "../../lib/dashboard-stats";
 import { saveScrollPosition, restoreScrollPosition } from "../../lib/scroll-position";
+
+type ProviderName = "aiml" | "featherless" | "gemini";
+type IntakeSource = "paste" | "document" | "speechmatics" | "sample";
+
+type AlertStatus = {
+  provider: "resend";
+  status: "sent" | "skipped" | "error";
+  threshold: number;
+  score?: number;
+  recipients?: number;
+  reason?: string;
+  id?: string;
+};
 
 const SNACKBAR_CSS = `
   @keyframes gemineye-slide-up { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -27,6 +39,11 @@ type SavedReport = {
     recommendation: string;
   }>;
   html: string;
+  provider?: ProviderName | null;
+  providerLabel?: string | null;
+  providerModel?: string | null;
+  alertStatus?: AlertStatus | null;
+  intakeSource?: IntakeSource;
 };
 
 type SecurityEvent = {
@@ -36,10 +53,19 @@ type SecurityEvent = {
   contractTitle: string;
   createdAt: string;
   blockedTerms?: string[];
+  provider?: ProviderName;
+  providerLabel?: string;
 };
 
 
 const ITEMS_PER_PAGE = 6;
+
+function providerDisplayName(provider?: ProviderName | null) {
+  if (provider === "aiml") return "AI/ML API Gemini";
+  if (provider === "featherless") return "Featherless open-source";
+  if (provider === "gemini") return "Gemini API";
+  return "Provider not recorded";
+}
 
 export default function DashboardPage() {
   const [reports, setReports] = useState<SavedReport[]>([]);
@@ -316,11 +342,11 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="font-serif text-3xl font-semibold">Report dashboard</h1>
-              <p className="mt-2 text-sm text-muted">View and download previously generated GeminEYE reports.</p>
+              <p className="mt-2 text-sm text-muted">View AI/ML API, Featherless, and Gemini reports, plus Speechmatics intake and Resend alert metadata.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button onClick={clearAllReports} className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Clear all</button>
-              <a href="/" className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Back to Analyzer</a>
+              <Link href="/" className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Back to Analyzer</Link>
             </div>
           </div>
         </div>
@@ -380,6 +406,9 @@ export default function DashboardPage() {
                           <span className="text-[11px] text-muted">{new Date(event.createdAt).toLocaleString()}</span>
                         </div>
                         <p className="mt-2 truncate text-sm font-medium text-ink">{event.contractTitle}</p>
+                        <p className="mt-1 truncate text-[11px] text-muted">
+                          {event.providerLabel || providerDisplayName(event.provider)}
+                        </p>
                         {renderBlockedTerms(event)}
                         <p className="mt-1 truncate text-xs text-muted">{event.reason}</p>
                       </div>
@@ -406,6 +435,9 @@ export default function DashboardPage() {
                           <span className="text-[11px] text-muted">{new Date(event.createdAt).toLocaleString()}</span>
                         </div>
                         <p className="mt-2 truncate text-sm font-medium text-ink">{event.contractTitle}</p>
+                        <p className="mt-1 truncate text-[11px] text-muted">
+                          {event.providerLabel || providerDisplayName(event.provider)}
+                        </p>
                         {renderBlockedTerms(event)}
                         <p className="mt-1 truncate text-xs text-muted">{event.reason}</p>
                       </div>
@@ -432,6 +464,9 @@ export default function DashboardPage() {
                           <span className="text-[11px] text-muted">{new Date(event.createdAt).toLocaleString()}</span>
                         </div>
                         <p className="mt-2 truncate text-sm font-medium text-ink">{event.contractTitle}</p>
+                        <p className="mt-1 truncate text-[11px] text-muted">
+                          {event.providerLabel || providerDisplayName(event.provider)}
+                        </p>
                         {renderBlockedTerms(event)}
                         <p className="mt-1 truncate text-xs text-muted">{event.reason}</p>
                       </div>
@@ -446,11 +481,33 @@ export default function DashboardPage() {
         </section>
 
         <section className="mt-8 rounded-3xl border border-line bg-panel p-4 sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="font-serif text-2xl font-semibold text-ink">Reports and delivery stack</h2>
+              <p className="mt-1 text-sm text-muted">Saved memo exports include provider, model, Speechmatics intake, and Resend alert context.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">AI/ML API</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Featherless</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Gemini</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Speechmatics</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Resend</span>
+            </div>
+          </div>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {dashboardStats.map((stat) => (
+              <div key={stat.label} className="rounded-2xl border border-line bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{stat.label}</p>
+                <p className="mt-2 font-serif text-3xl font-semibold text-ink">{stat.value}</p>
+                <p className="mt-1 text-xs text-muted">{stat.helper}</p>
+              </div>
+            ))}
+          </div>
           {reports.length === 0 ? (
             <div className="text-center py-12">
               <h3 className="text-ink font-semibold mb-2">No saved reports yet</h3>
               <p className="text-muted text-sm mb-4">Generate a report from the analyzer to view it here.</p>
-              <a href="/" className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Go to Analyzer</a>
+              <Link href="/" className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Go to Analyzer</Link>
             </div>
           ) : (
             <>
@@ -525,13 +582,13 @@ export default function DashboardPage() {
         </section>
 
         <div className="mt-8 rounded-2xl border border-line bg-panel px-5 py-4 text-xs text-muted">
-          GeminEYE is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions.
+          GeminEYE is provided for informational support only and does not replace legal advice. Provider stack: AI/ML API primary, Featherless open-source fallback/helper, Gemini final fallback, Speechmatics transcription, and Resend alerts.
         </div>
 
         {showUndo && deletedReport ? (
           <div className="fixed inset-x-3 bottom-4 z-60 flex max-w-xl flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-3 shadow-lg gemineye-snackbar sm:inset-x-auto sm:right-6 sm:bottom-6">
             <style dangerouslySetInnerHTML={{ __html: SNACKBAR_CSS }} />
-            <div className="min-w-0 flex-1 wrap-break-word text-sm text-ink">Deleted "{deletedReport.title}"</div>
+            <div className="min-w-0 flex-1 wrap-break-word text-sm text-ink">Deleted &quot;{deletedReport.title}&quot;</div>
             <button onClick={undoDelete} className="button-pop rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Undo</button>
             <button onClick={() => { setShowUndo(false); setDeletedReport(null); if (undoTimerRef.current) { window.clearTimeout(undoTimerRef.current); undoTimerRef.current = null; } }} className="button-pop rounded-full border border-line bg-white px-3 py-1 text-xs text-muted transition hover:border-accent hover:text-accent">Dismiss</button>
           </div>

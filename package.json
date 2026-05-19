@@ -1,13 +1,18 @@
 {
   "name": "gemineye",
   "version": "0.1.0",
-  "description": "AI-powered contract risk analyzer. Upload PDFs, DOCX files, or paste contract text. GeminEYE extracts clauses, scores risk, and delivers structured investigator-style memos with evidence-backed findings.",
+  "description": "Domain-specialized contract risk agent with AI/ML API primary routing, Featherless open-source fallback, Gemini fallback, Speechmatics transcription, and Resend alerts.",
   "keywords": [
     "contract",
     "risk",
     "analysis",
     "legal",
     "ai",
+    "agent",
+    "aimlapi",
+    "featherless",
+    "speechmatics",
+    "resend",
     "gemini",
     "compliance"
   ],

@@ -23,18 +23,18 @@ const ui = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   title: "GeminEYE – AI Contract Risk Analyzer",
-  description: "AI-powered contract risk analyzer. Upload PDFs, DOCX files, or paste text. Get structured investigator-style memos with evidence-backed findings and risk scores.",
-  keywords: "contract analysis, AI, risk assessment, legal review, document analysis",
+  description: "AI-powered contract risk agent with AI/ML API, Featherless open-source fallback, Gemini, Speechmatics transcription, and Resend alerts.",
+  keywords: "contract analysis, AI/ML API, Featherless, Speechmatics, Resend, Gemini, legal AI agent, risk assessment",
   openGraph: {
     title: "GeminEYE – AI Contract Risk Analyzer",
-    description: "Analyze contracts with AI-powered risk assessment and structured findings.",
+    description: "Analyze contracts with provider-swappable AI, open-source Featherless models, Speechmatics intake, and Resend alerts.",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: "GeminEYE – AI Contract Risk Analyzer",
-    description: "Analyze contracts with AI-powered risk assessment.",
+    description: "Analyze contracts with AI/ML API, Featherless, Gemini, Speechmatics, and Resend.",
   },
 };
 
