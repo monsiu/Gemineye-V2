@@ -64,6 +64,30 @@ async function pollJobStatus(params: {
   return { status: "processing" as const };
 }
 
+async function fetchTranscript(params: { baseUrl: string; apiKey: string; jobId: string }) {
+  const transcriptResponse = await fetch(`${params.baseUrl}/jobs/${params.jobId}/transcript?format=txt`, {
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+    },
+  });
+
+  if (!transcriptResponse.ok) {
+    const payload = (await transcriptResponse.json().catch(() => null)) as { error?: string } | null;
+    return {
+      ok: false as const,
+      error: payload?.error ?? `Speechmatics transcript error (${transcriptResponse.status}).`,
+    };
+  }
+
+  const transcriptText = (await transcriptResponse.text()).trim();
+
+  if (!transcriptText) {
+    return { ok: false as const, error: "Speechmatics returned an empty transcript." };
+  }
+
+  return { ok: true as const, text: transcriptText };
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.SPEECHMATICS_API_KEY?.trim();
   if (!apiKey) {
@@ -78,6 +102,40 @@ export async function POST(request: Request) {
   const intervalMs = Number(process.env.SPEECHMATICS_POLL_INTERVAL_MS ?? DEFAULT_POLL_INTERVAL_MS);
 
   const formData = await request.formData();
+  const jobIdInput = formData.get("jobId");
+  const jobIdFromBody = typeof jobIdInput === "string" ? jobIdInput.trim() : "";
+
+  if (jobIdFromBody) {
+    const pollResult = await pollJobStatus({
+      baseUrl,
+      apiKey,
+      jobId: jobIdFromBody,
+      timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : DEFAULT_POLL_TIMEOUT_MS,
+      intervalMs: Number.isFinite(intervalMs) ? intervalMs : DEFAULT_POLL_INTERVAL_MS,
+    });
+
+    if (pollResult.status === "processing") {
+      return NextResponse.json(
+        { jobId: jobIdFromBody, status: "processing", error: "Transcription still processing. Try again shortly." },
+        { status: 202 }
+      );
+    }
+
+    if (pollResult.status === "error") {
+      return NextResponse.json({ jobId: jobIdFromBody, status: "error", error: pollResult.reason }, { status: 500 });
+    }
+
+    const transcriptResult = await fetchTranscript({ baseUrl, apiKey, jobId: jobIdFromBody });
+    if (!transcriptResult.ok) {
+      return NextResponse.json(
+        { jobId: jobIdFromBody, status: "error", error: transcriptResult.error },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ jobId: jobIdFromBody, status: "completed", text: transcriptResult.text });
+  }
+
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
@@ -146,28 +204,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ jobId, status: "error", error: pollResult.reason }, { status: 500 });
   }
 
-  const transcriptResponse = await fetch(`${baseUrl}/jobs/${jobId}/transcript?format=txt`, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-  });
-
-  if (!transcriptResponse.ok) {
-    const payload = (await transcriptResponse.json().catch(() => null)) as { error?: string } | null;
+  const transcriptResult = await fetchTranscript({ baseUrl, apiKey, jobId });
+  if (!transcriptResult.ok) {
     return NextResponse.json(
-      { jobId, status: "error", error: payload?.error ?? `Speechmatics transcript error (${transcriptResponse.status}).` },
+      { jobId, status: "error", error: transcriptResult.error },
       { status: 500 }
     );
   }
 
-  const transcriptText = (await transcriptResponse.text()).trim();
-
-  if (!transcriptText) {
-    return NextResponse.json(
-      { jobId, status: "error", error: "Speechmatics returned an empty transcript." },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({ jobId, status: "completed", text: transcriptText });
+  return NextResponse.json({ jobId, status: "completed", text: transcriptResult.text });
 }

@@ -150,6 +150,9 @@ const REPORT_LOGO = `
   <path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#0f766e" fill-rule="evenodd"/>
 </svg>`;
 
+const TRANSCRIPTION_MAX_ATTEMPTS = 3;
+const TRANSCRIPTION_RETRY_DELAY_MS = 2000;
+
 const SAMPLE_MEMO: MemoPayload = {
   narrative: [
     "[SAMPLE] This is placeholder analysis. Upload a contract and click 'Run analysis' to generate an actual memo. This demo shows the investigator-style format with liability, indemnity, and data privacy risks highlighted.",
@@ -1334,8 +1337,10 @@ export default function Home() {
   const [intakeSource, setIntakeSource] = useState<IntakeSource>("paste");
   const [transcriptionStatus, setTranscriptionStatus] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptionJobId, setTranscriptionJobId] = useState<string | null>(null);
   const [activeReviewArea, setActiveReviewArea] = useState<string | null>(null);
   const reviewAreasRef = useRef<HTMLDivElement | null>(null);
+  const transcriptionRequestIdRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1561,6 +1566,7 @@ export default function Home() {
   }
 
   const resetAll = () => {
+    transcriptionRequestIdRef.current += 1;
     setContractTitle("");
     setContractText("");
     setMemo(SAMPLE_MEMO);
@@ -1579,6 +1585,7 @@ export default function Home() {
     setIntakeSource("paste");
     setTranscriptionStatus(null);
     setIsTranscribing(false);
+    setTranscriptionJobId(null);
     setActiveReviewArea(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1970,6 +1977,62 @@ export default function Home() {
     window.setTimeout(() => URL.revokeObjectURL(url), 30000);
   };
 
+  const applyTranscription = (text: string, fallbackTitle?: string) => {
+    setContractText(text);
+    setIntakeSource("speechmatics");
+    if (fallbackTitle) {
+      setContractTitle((current) => (current.trim() ? current : fallbackTitle));
+    }
+  };
+
+  const pollTranscriptionJob = async (jobId: string, requestId: number, fallbackTitle?: string) => {
+    for (let attempt = 0; attempt < TRANSCRIPTION_MAX_ATTEMPTS; attempt += 1) {
+      if (transcriptionRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      const pollForm = new FormData();
+      pollForm.append("jobId", jobId);
+
+      const pollResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: pollForm,
+      });
+
+      const pollData = (await pollResponse.json().catch(() => null)) as TranscriptionPayload | null;
+
+      if (transcriptionRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      if (pollResponse.status === 202) {
+        setTranscriptionStatus(pollData?.error ?? "Transcription still processing. Checking again...");
+        if (attempt < TRANSCRIPTION_MAX_ATTEMPTS - 1) {
+          await new Promise((resolve) => setTimeout(resolve, TRANSCRIPTION_RETRY_DELAY_MS));
+          continue;
+        }
+        setTranscriptionStatus("Transcription is still running. Click Retry to continue.");
+        setIsTranscribing(false);
+        return;
+      }
+
+      if (!pollResponse.ok) {
+        const message = pollData?.error ?? `Audio transcription failed (${pollResponse.status}).`;
+        throw new Error(message);
+      }
+
+      if (!pollData?.text) {
+        throw new Error("Speechmatics returned an empty transcript.");
+      }
+
+      applyTranscription(pollData.text, fallbackTitle);
+      setTranscriptionStatus("Transcription complete.");
+      setTranscriptionJobId(null);
+      setIsTranscribing(false);
+      return;
+    }
+  };
+
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -2026,9 +2089,13 @@ export default function Home() {
       return;
     }
 
+    const requestId = transcriptionRequestIdRef.current + 1;
+    transcriptionRequestIdRef.current = requestId;
+    setTranscriptionJobId(null);
     setTranscriptionStatus("Transcribing audio...");
     setError(null);
     setIsTranscribing(true);
+    const fallbackTitle = file.name.replace(/\.[^/.]+$/, "");
 
     try {
       const formData = new FormData();
@@ -2042,6 +2109,12 @@ export default function Home() {
       const data = (await response.json().catch(() => null)) as TranscriptionPayload | null;
 
       if (response.status === 202) {
+        if (data?.jobId) {
+          setTranscriptionJobId(data.jobId);
+          setTranscriptionStatus("Transcription queued. Checking status...");
+          await pollTranscriptionJob(data.jobId, requestId, fallbackTitle);
+          return;
+        }
         setTranscriptionStatus(data?.error ?? "Transcription queued. Try again shortly.");
         return;
       }
@@ -2051,29 +2124,53 @@ export default function Home() {
         throw new Error(message);
       }
 
-      if (data?.text) {
-        setContractText(data.text);
-        setIntakeSource("speechmatics");
-        if (!contractTitle.trim()) {
-          setContractTitle(file.name.replace(/\.[^/.]+$/, ""));
-        }
+      if (!data?.text) {
+        throw new Error("Speechmatics returned an empty transcript.");
       }
 
+      applyTranscription(data.text, fallbackTitle);
       setTranscriptionStatus("Transcription complete.");
     } catch (err) {
       setTranscriptionStatus(null);
       setError(err instanceof Error ? err.message : "Audio transcription failed.");
     } finally {
-      setIsTranscribing(false);
+      if (transcriptionRequestIdRef.current === requestId) {
+        setIsTranscribing(false);
+      }
+    }
+  };
+
+  const retryTranscription = async () => {
+    if (!transcriptionJobId) {
+      return;
+    }
+
+    const requestId = transcriptionRequestIdRef.current + 1;
+    transcriptionRequestIdRef.current = requestId;
+    setError(null);
+    setIsTranscribing(true);
+    setTranscriptionStatus("Retrying transcription...");
+
+    try {
+      await pollTranscriptionJob(transcriptionJobId, requestId);
+    } catch (err) {
+      setTranscriptionStatus(null);
+      setError(err instanceof Error ? err.message : "Audio transcription failed.");
+    } finally {
+      if (transcriptionRequestIdRef.current === requestId) {
+        setIsTranscribing(false);
+      }
     }
   };
 
   const loadSampleContract = (sample: typeof SAMPLE_CONTRACTS[0]) => {
+    transcriptionRequestIdRef.current += 1;
     setContractTitle(sample.title);
     setContractText(sample.text);
     setIntakeSource("sample");
     setFileStatus(null);
     setTranscriptionStatus(null);
+    setTranscriptionJobId(null);
     setError(null);
   };
 
@@ -2398,8 +2495,17 @@ export default function Home() {
                   </div>
                 ) : null}
                 {transcriptionStatus ? (
-                  <div className="rounded-xl border border-line bg-white px-3 py-2 text-xs text-muted">
-                    {transcriptionStatus}
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-xs text-muted">
+                    <span>{transcriptionStatus}</span>
+                    {transcriptionJobId && !isTranscribing ? (
+                      <button
+                        type="button"
+                        onClick={retryTranscription}
+                        className="rounded-lg border border-line bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-ink transition hover:border-accent hover:text-accent"
+                      >
+                        Retry transcription
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="rounded-xl border border-line bg-white px-3 py-2">
