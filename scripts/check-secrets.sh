@@ -19,7 +19,7 @@ fi
 # Patterns to detect (high-confidence indicators)
 PATTERNS=(
   "GEMINI_API_KEY=[^$]"           # Non-empty GEMINI key
-  "AI_ML_API_KEY=[^$]"            # Non-empty AI/ML key
+  "AI_ML_API_KEY=[^$]"            # Non-empty Gemini key (AI_ML_API_KEY)
   "Authorization: Bearer [a-z0-9]" # Bearer tokens
   "_api_key['\"].*['\"]"           # Generic API key patterns
   "secret['\"].*['\"]"             # Secret values

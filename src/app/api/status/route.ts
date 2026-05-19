@@ -72,18 +72,18 @@ export function GET() {
       providerPriority: resolveProviderPriority(),
       providerDetails: {
         aiml: {
-          label: "AI/ML API Gemini",
+          label: "Gemini",
           configured: hasAiMlConfig,
           model: aiMlApiModel || undefined,
         },
         featherless: {
-          label: "Featherless open-source",
+          label: "Featherless gap-fill",
           configured: hasFeatherlessConfig,
           model: featherlessModel || featherlessFallbackModels[0] || undefined,
           fallbackModels: featherlessFallbackModels,
         },
         gemini: {
-          label: "Gemini API",
+          label: "Gemini direct",
           configured: hasGeminiConfig,
           model: process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash",
         },

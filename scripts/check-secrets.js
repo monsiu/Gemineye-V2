@@ -33,13 +33,13 @@ if (!stagedFiles) {
 
 // Patterns to detect (high-confidence indicators)
 const patterns = [
-  { pattern: /GEMINI_API_KEY\s*=\s*[a-zA-Z0-9_\-]{10,}/, name: 'GEMINI API Key' },
-  { pattern: /AI_ML_API_KEY\s*=\s*[a-zA-Z0-9_\-]{10,}/, name: 'AI/ML API Key' },
+  { pattern: /GEMINI_API_KEY\s*=\s*[a-zA-Z0-9_\-]{10,}/, name: 'Gemini Key' },
+  { pattern: /AI_ML_API_KEY\s*=\s*[a-zA-Z0-9_\-]{10,}/, name: 'Gemini Key (AI_ML_API_KEY)' },
   { pattern: /Authorization:\s*Bearer\s+[a-zA-Z0-9_\-\.]+/, name: 'Bearer Token' },
   { pattern: /_api_key\s*[=:]\s*["'][a-zA-Z0-9_\-\.]+["']/, name: 'Generic API Key' },
   { pattern: /secret\s*[=:]\s*["'][^\s"']+["']/, name: 'Secret Pattern' },
   { pattern: /GEMINI_API_KEY\s*=\s*(?!your_|insert_|example_)/, name: 'Non-placeholder GEMINI Key' },
-  { pattern: /AI_ML_API_KEY\s*=\s*(?!your_|insert_|example_)/, name: 'Non-placeholder AI/ML Key' },
+  { pattern: /AI_ML_API_KEY\s*=\s*(?!your_|insert_|example_)/, name: 'Non-placeholder Gemini Key (AI_ML_API_KEY)' },
 ];
 
 let found = 0;

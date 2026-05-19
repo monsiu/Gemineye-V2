@@ -20,6 +20,36 @@ type MemoPayload = {
   overallRiskScore?: number;
 };
 
+type AnalysisComparison = {
+  providers: Array<{
+    provider: ProviderName;
+    label: string;
+    model: string;
+    score: number | null;
+    narrative: string[];
+    summary: string[];
+    findings: MemoFinding[];
+  }>;
+  consolidatedScore: number | null;
+  mergedNarrative: string[];
+  mergedSummary: string[];
+  mergedFindings: MemoFinding[];
+  agreementFlags: Array<{
+    flag: string;
+    category: string;
+    risk: "Low" | "Medium" | "High";
+    providers: ProviderName[];
+    labels: string[];
+    findings: MemoFinding[];
+  }>;
+  missedClauses: Array<{
+    provider: ProviderName;
+    label: string;
+    clauses: MemoFinding[];
+  }>;
+  featherlessGapClauses: MemoFinding[];
+};
+
 type SavedFinding = MemoFinding;
 
 type SecurityEvent = {
@@ -48,6 +78,17 @@ type ProviderAttempt = {
   label: string;
   ok: boolean;
   model?: string;
+  error?: string;
+};
+
+type ProviderResultCard = {
+  provider: ProviderName;
+  label: string;
+  model?: string;
+  score: number | null;
+  findingsCount: number;
+  summary: string[];
+  ok: boolean;
   error?: string;
 };
 
@@ -80,6 +121,21 @@ type StatusPayload = {
   providerDetails?: Partial<Record<ProviderName, ProviderDetail>>;
   integrations?: Partial<IntegrationStatus>;
   alerting?: { threshold?: number };
+};
+
+type AnalyzeResponse = {
+  memo?: MemoPayload;
+  configured?: boolean;
+  fallback?: boolean;
+  error?: string;
+  contractTitle?: string;
+  alert?: AlertStatus;
+  provider?: ProviderName;
+  providerLabel?: string;
+  providerModel?: string;
+  providerPriority?: ProviderName[];
+  attempts?: ProviderAttempt[];
+  analysisComparison?: AnalysisComparison | null;
 };
 
 type TranscriptionPayload = {
@@ -235,10 +291,52 @@ function highlightRiskTerms(value: string) {
 }
 
 function providerDisplayName(provider?: ProviderName | null) {
-  if (provider === "aiml") return "AI/ML API Gemini";
-  if (provider === "featherless") return "Featherless open-source";
-  if (provider === "gemini") return "Gemini API";
+  if (provider === "aiml") return "Gemini";
+  if (provider === "featherless") return "Featherless gap-fill";
+  if (provider === "gemini") return "Gemini direct";
   return "Configured AI provider";
+}
+
+function normalizeProviderLabel(label?: string | null, provider?: ProviderName | null) {
+  const fallback = providerDisplayName(provider);
+  if (!label) return fallback;
+
+  return label
+    .replace(/Gemini\s*\(AI\/ML API\)/gi, "Gemini")
+    .replace(/Gemini AI\/ML/gi, "Gemini")
+    .replace(/AI\/ML API Gemini/gi, "Gemini")
+    .replace(/Gemini API/gi, "Gemini direct");
+}
+
+function buildProviderResultCards(
+  comparison?: AnalysisComparison | null,
+  attempts?: ProviderAttempt[]
+): ProviderResultCard[] {
+  const successfulCards =
+    comparison?.providers.map((provider) => ({
+      provider: provider.provider,
+      label: normalizeProviderLabel(provider.label, provider.provider),
+      model: provider.model,
+      score: provider.score,
+      findingsCount: provider.findings.length,
+      summary: provider.summary,
+      ok: true,
+    })) ?? [];
+  const successfulProviders = new Set(successfulCards.map((provider) => provider.provider));
+  const failedCards = (attempts ?? [])
+    .filter((attempt) => !successfulProviders.has(attempt.provider))
+    .map((attempt) => ({
+      provider: attempt.provider,
+      label: normalizeProviderLabel(attempt.label, attempt.provider),
+      model: attempt.model,
+      score: null,
+      findingsCount: 0,
+      summary: [],
+      ok: attempt.ok,
+      error: attempt.error,
+    }));
+
+  return [...successfulCards, ...failedCards];
 }
 
 function intakeSourceLabel(source?: IntakeSource) {
@@ -246,11 +344,6 @@ function intakeSourceLabel(source?: IntakeSource) {
   if (source === "document") return "Document upload extraction";
   if (source === "sample") return "Sample contract";
   return "Pasted contract text";
-}
-
-function formatProviderPriority(priority?: ProviderName[]) {
-  const ordered = priority && priority.length > 0 ? priority : ["aiml", "featherless", "gemini"] as ProviderName[];
-  return ordered.map(providerDisplayName).join(" -> ");
 }
 
 function buildReportHtml(input: {
@@ -265,12 +358,12 @@ function buildReportHtml(input: {
   attempts?: ProviderAttempt[];
   alert?: AlertStatus | null;
   intakeSource?: IntakeSource;
+  analysisComparison?: AnalysisComparison | null;
 }) {
   const generatedAt = formatDateTime(new Date());
   const title = input.contractTitle.trim() || "Contract Review";
-  const providerName = input.providerLabel || providerDisplayName(input.provider);
+  const providerName = normalizeProviderLabel(input.providerLabel, input.provider);
   const providerModel = input.providerModel?.trim() || "Model not reported";
-  const priorityLabel = formatProviderPriority(input.providerPriority);
   const intakeLabel = intakeSourceLabel(input.intakeSource);
   const alertLabel = input.alert
     ? `Resend ${input.alert.status}${typeof input.alert.threshold === "number" ? ` at ${input.alert.threshold.toFixed(1)} / 10` : ""}`
@@ -279,7 +372,7 @@ function buildReportHtml(input: {
     input.attempts && input.attempts.length > 0
       ? input.attempts
           .map((attempt) =>
-            `${attempt.label}${attempt.model ? ` (${attempt.model})` : ""}: ${attempt.ok ? "success" : `failed${attempt.error ? ` - ${attempt.error}` : ""}`}`
+            `${normalizeProviderLabel(attempt.label, attempt.provider)}${attempt.model ? ` (${attempt.model})` : ""}: ${attempt.ok ? "success" : `failed${attempt.error ? ` - ${attempt.error}` : ""}`}`
           )
           .join("\n")
       : "No provider attempts were reported.";
@@ -352,6 +445,85 @@ function buildReportHtml(input: {
       }
     )
     .join("");
+
+  const comparison = input.analysisComparison;
+  const providerResultCards = buildProviderResultCards(comparison, input.attempts);
+  const agreementFlags = comparison?.agreementFlags ?? [];
+  const featherlessParticipated = Boolean(
+    providerResultCards.some((provider) => provider.provider === "featherless" && provider.ok)
+  );
+  const featherlessGapClauses =
+    comparison?.featherlessGapClauses ??
+    comparison?.missedClauses.find((provider) => provider.provider === "featherless")?.clauses ??
+    [];
+  const noAgreementCopy = featherlessParticipated
+    ? "Gemini and Featherless did not land on the same risk area in this pass."
+    : "Featherless did not return a valid comparison result for this pass.";
+  const noGapCopy = featherlessParticipated
+    ? "Featherless checked the contract and did not surface an extra clause beyond Gemini."
+    : "Featherless was not available for a gap-fill comparison on this pass.";
+
+  const comparisonSection = providerResultCards.length > 0
+    ? `
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Provider cross-check</h2>
+            <p>Gemini leads the review, Featherless runs in parallel as the gap-filler, and the combined score reflects both passes.</p>
+          </div>
+          <span class="${overallRiskToneClass}">${escapeHtml(
+            comparison?.consolidatedScore === null || comparison?.consolidatedScore === undefined
+              ? "No combined score"
+              : `Combined ${comparison.consolidatedScore.toFixed(1)} / 10`
+          )}</span>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+          ${providerResultCards
+            .map(
+              (provider) => `
+                <div style="border:1px solid var(--line); border-radius: 20px; background: var(--panel); padding: 14px;">
+                  <div style="display:flex; justify-content:space-between; gap: 12px; align-items:start;">
+                    <div>
+                      <div style="font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);">${escapeHtml(provider.label)}</div>
+                      <div style="margin-top: 4px; font-size: 14px; font-weight: 600; color: var(--ink);">${escapeHtml(provider.model || "Model not reported")}</div>
+                    </div>
+                    <span class="badge ${provider.ok && provider.score !== null ? provider.score >= 6.5 ? 'badge-high' : provider.score >= 3.5 ? 'badge-medium' : 'badge-low' : ''}">
+                      ${provider.ok ? provider.score === null ? 'No score' : `${provider.score.toFixed(1)} / 10` : 'Failed'}
+                    </span>
+                  </div>
+                  <p style="margin-top: 10px; font-size: 12px; color: var(--muted);">${provider.findingsCount} findings captured</p>
+                  <p style="margin-top: 6px; font-size: 12px; color: var(--muted);">${provider.summary.slice(0, 2).map((item) => escapeHtml(item)).join("<br />") || "No summary returned."}</p>
+                  ${provider.error ? `<p style="margin-top: 6px; font-size: 12px; color: var(--signal);">${escapeHtml(provider.error)}</p>` : ""}
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="section-body" style="margin-top: 12px;">
+          <p class="label">Agreed flags</p>
+          ${agreementFlags.length > 0
+            ? `<ul style="margin: 0; padding-left: 18px;">${agreementFlags
+                .map(
+                  (flag) =>
+                    `<li><strong>Flag ${escapeHtml(flag.flag)}: ${escapeHtml(flag.category)} (${escapeHtml(flag.risk)})</strong> - ${escapeHtml(flag.labels.join(" + "))} agreed on this risk.</li>`
+                )
+                .join("")}</ul>`
+            : `<p>${escapeHtml(noAgreementCopy)}</p>`}
+        </div>
+        <div class="section-body" style="margin-top: 12px;">
+          <p class="label">Featherless gap-fill</p>
+          ${featherlessGapClauses.length > 0
+            ? `<ul style="margin: 0; padding-left: 18px;">${featherlessGapClauses
+                .map(
+                  (clause) =>
+                    `<li><strong>${escapeHtml(clause.category)} (${escapeHtml(clause.risk)})</strong> - Featherless found this clause Gemini did not surface: ${escapeHtml(clause.recommendation)}</li>`
+                )
+                .join("")}</ul>`
+            : `<p>${escapeHtml(noGapCopy)}</p>`}
+        </div>
+      </section>
+    `
+    : "";
 
   const contractText = input.contractText.trim().length > 0
     ? `<pre>${escapeHtml(input.contractText)}</pre>`
@@ -1065,6 +1237,8 @@ function buildReportHtml(input: {
         <div class="findings">${findings || '<p class="empty">No findings were returned.</p>'}</div>
       </section>
 
+      ${comparisonSection}
+
       <section class="section">
         <div class="section-header">
           <div>
@@ -1079,13 +1253,13 @@ function buildReportHtml(input: {
         <div class="section-header">
           <div>
             <h2>Provider and integration trail</h2>
-            <p>Hackathon stack disclosure for reproducible analysis, open-source model fallback, voice intake, and alerting.</p>
+            <p>Gemini leads the review and Featherless fills in gaps Gemini may miss, with voice intake and alerting shown for traceability.</p>
           </div>
           <span class="badge">${escapeHtml(providerName)}</span>
         </div>
         <div class="section-body">
-          <p><strong>Provider priority:</strong> ${escapeHtml(priorityLabel)}</p>
-          <p><strong>Featherless role:</strong> open-source model fallback/helper after AI/ML API and before direct Gemini.</p>
+          <p><strong>Provider strategy:</strong> Gemini first, Featherless adds coverage when Gemini misses something.</p>
+          <p><strong>Featherless role:</strong> open-source gap-filler for missed details, alternate phrasing, and second-pass coverage.</p>
           <p><strong>Speechmatics role:</strong> audio upload transcription into contract text when used for intake.</p>
           <p><strong>Resend role:</strong> threshold-based email alerts for high-risk scores.</p>
           <pre>${escapeHtml(attemptSummary)}</pre>
@@ -1093,7 +1267,7 @@ function buildReportHtml(input: {
       </section>
 
       <div class="footer">
-        GeminEYE is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions. Provider stack: AI/ML API primary, Featherless open-source fallback/helper, Gemini final fallback, Speechmatics transcription, and Resend alerts.
+        GeminEYE is provided for informational support only and does not replace legal advice. This report should be reviewed by a qualified professional before use in business or legal decisions. Provider stack: Gemini-first analysis with Featherless gap-filling, Speechmatics transcription, and Resend alerts.
       </div>
     </main>
     <script>
@@ -1156,6 +1330,7 @@ export default function Home() {
   const [providerPriority, setProviderPriority] = useState<ProviderName[]>(["aiml", "featherless", "gemini"]);
   const [providerDetails, setProviderDetails] = useState<Partial<Record<ProviderName, ProviderDetail>>>({});
   const [providerAttempts, setProviderAttempts] = useState<ProviderAttempt[]>([]);
+  const [analysisComparison, setAnalysisComparison] = useState<AnalysisComparison | null>(null);
   const [intakeSource, setIntakeSource] = useState<IntakeSource>("paste");
   const [transcriptionStatus, setTranscriptionStatus] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -1308,21 +1483,23 @@ export default function Home() {
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : "border-line bg-panel text-muted";
 
-  const alertBadgeTone = (status: AlertStatus["status"]) => {
-    if (status === "sent") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    if (status === "error") return "border-red-200 bg-red-50 text-red-700";
-    return "border-amber-200 bg-amber-50 text-amber-800";
-  };
-
-  const alertStatusLabel = (status: AlertStatus["status"]) => {
-    if (status === "sent") return "Sent";
-    if (status === "error") return "Failed";
-    return "Skipped";
-  };
-
-  const activeProviderLabel = analysisProviderLabel || providerDisplayName(analysisProvider);
-  const providerPriorityLabel = formatProviderPriority(providerPriority);
+  const activeProviderLabel = normalizeProviderLabel(analysisProviderLabel, analysisProvider);
   const providerModelLabel = (provider: ProviderName) => providerDetails[provider]?.model || "model pending";
+  const agreementFlags = analysisComparison?.agreementFlags ?? [];
+  const providerResultCards = buildProviderResultCards(analysisComparison, providerAttempts);
+  const featherlessParticipated = Boolean(
+    providerResultCards.some((provider) => provider.provider === "featherless" && provider.ok)
+  );
+  const featherlessGapClauses =
+    analysisComparison?.featherlessGapClauses ??
+    analysisComparison?.missedClauses.find((provider) => provider.provider === "featherless")?.clauses ??
+    [];
+  const noAgreementCopy = featherlessParticipated
+    ? "Gemini and Featherless did not land on the same risk area in this pass."
+    : "Featherless did not return a valid comparison result for this pass.";
+  const noGapCopy = featherlessParticipated
+    ? "Featherless checked the contract and did not surface an extra clause beyond Gemini."
+    : "Featherless was not available for a gap-fill comparison on this pass.";
 
   const overallRiskMeta = (() => {
     const score = Number(memo.overallRiskScore);
@@ -1398,6 +1575,7 @@ export default function Home() {
     setAnalysisProviderLabel(null);
     setAnalysisProviderModel(null);
     setProviderAttempts([]);
+    setAnalysisComparison(null);
     setIntakeSource("paste");
     setTranscriptionStatus(null);
     setIsTranscribing(false);
@@ -1420,6 +1598,7 @@ export default function Home() {
     setAnalysisProviderLabel(null);
     setAnalysisProviderModel(null);
     setProviderAttempts([]);
+    setAnalysisComparison(null);
     setActiveReviewArea(null);
   };
 
@@ -1454,6 +1633,7 @@ export default function Home() {
           providerModel?: string;
           providerPriority?: ProviderName[];
           attempts?: ProviderAttempt[];
+          analysisComparison?: AnalysisComparison | null;
         };
         if (data.memo) {
           const resolvedMemo = data.memo;
@@ -1480,6 +1660,7 @@ export default function Home() {
             setProviderPriority(data.providerPriority);
           }
           setProviderAttempts(data.attempts ?? []);
+          setAnalysisComparison(data.analysisComparison ?? null);
 
           const generatedReportHtml = buildReportHtml({
             contractTitle: resolvedContractTitle,
@@ -1493,6 +1674,7 @@ export default function Home() {
             attempts: data.attempts ?? [],
             alert: data.alert ?? null,
             intakeSource,
+            analysisComparison: data.analysisComparison ?? null,
           });
 
           // Re-add cached analyses back to the dashboard when the report is opened again.
@@ -1513,6 +1695,8 @@ export default function Home() {
               providerModel: data.providerModel ?? null,
               alertStatus: data.alert ?? null,
               intakeSource,
+              analysisComparison: data.analysisComparison ?? null,
+              providerAttempts: data.attempts ?? [],
             });
           }
 
@@ -1588,6 +1772,7 @@ export default function Home() {
         providerModel?: string;
         providerPriority?: ProviderName[];
         attempts?: ProviderAttempt[];
+        analysisComparison?: AnalysisComparison | null;
       };
       
       // Cache the result
@@ -1621,6 +1806,7 @@ export default function Home() {
         setProviderPriority(data.providerPriority);
       }
       setProviderAttempts(data.attempts ?? []);
+      setAnalysisComparison(data.analysisComparison ?? null);
 
       const resolvedMemo = data.memo ?? memo;
       const resolvedContractTitle = (data.contractTitle?.trim() || contractTitle.trim() || "Contract Review");
@@ -1638,6 +1824,7 @@ export default function Home() {
         attempts: data.attempts ?? [],
         alert: data.alert ?? null,
         intakeSource,
+        analysisComparison: data.analysisComparison ?? null,
       });
 
       // Do not persist fallback/demo reports to the dashboard storage
@@ -1658,6 +1845,8 @@ export default function Home() {
           providerModel: data.providerModel ?? null,
           alertStatus: data.alert ?? null,
           intakeSource,
+          analysisComparison: data.analysisComparison ?? null,
+          providerAttempts: data.attempts ?? [],
         });
       }
 
@@ -1707,6 +1896,8 @@ export default function Home() {
     providerModel?: string | null;
     alertStatus?: AlertStatus | null;
     intakeSource?: IntakeSource;
+    analysisComparison?: AnalysisComparison | null;
+    providerAttempts?: ProviderAttempt[];
   }) {
     try {
       const key = "gemineye_reports";
@@ -1758,6 +1949,7 @@ export default function Home() {
       attempts: providerAttempts,
       alert: alertStatus,
       intakeSource,
+      analysisComparison,
     });
     const blob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1898,6 +2090,7 @@ export default function Home() {
       providerModel: analysisProviderModel,
       providerPriority,
       providerAttempts,
+      analysisComparison,
       intakeSource,
       integrations: {
         speechmatics: integrationStatus.speechmatics,
@@ -1963,7 +2156,10 @@ export default function Home() {
                 Review contracts with confidence.
               </h1>
               <p className="max-w-xl text-base text-muted">
-                Upload a PDF or DOCX, paste contract text, or transcribe audio with Speechmatics. GeminEYE turns dense agreements into a clear, evidence-backed risk memo using AI/ML API first, Featherless open-source models as the fallback/helper layer, Gemini at the end, and Resend alerts for high-risk escalations.
+                Upload a PDF or DOCX, paste contract text, or transcribe audio with Speechmatics. GeminEYE turns dense agreements into a concise, evidence-backed risk memo with Gemini leading the review while Featherless runs in parallel to fill gaps and cross-check scoring.
+              </p>
+              <p className="max-w-xl text-sm text-muted">
+                GeminEYE is provided for informational support only and does not replace legal advice. Review the output with a qualified professional before using it in business or legal decisions.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <button
@@ -2086,25 +2282,19 @@ export default function Home() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs uppercase tracking-[0.2em] text-muted">
-                        AI providers
+                        Providers
                       </span>
                       <span
                         className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.aiml)}`}
-                        title={`AI/ML API primary: ${providerModelLabel("aiml")}`}
+                        title={`Gemini primary: ${providerModelLabel("aiml")}`}
                       >
-                        AI/ML API
+                        Gemini
                       </span>
                       <span
                         className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.featherless)}`}
-                        title={`Featherless open-source fallback/helper: ${providerModelLabel("featherless")}`}
+                        title={`Featherless parallel gap-fill: ${providerModelLabel("featherless")}`}
                       >
                         Featherless
-                      </span>
-                      <span
-                        className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.gemini)}`}
-                        title={`Gemini final fallback: ${providerModelLabel("gemini")}`}
-                      >
-                        Gemini
                       </span>
                     </div>
                     <button
@@ -2130,10 +2320,6 @@ export default function Home() {
                         Alert {alertThreshold.toFixed(1)} / 10
                       </span>
                     ) : null}
-                  </div>
-                  <div className="rounded-xl border border-line bg-white px-3 py-2 text-[11px] text-muted">
-                    <span className="font-semibold uppercase tracking-[0.18em] text-ink">Priority</span>{" "}
-                    {providerPriorityLabel}
                   </div>
                 </div>
               </div>
@@ -2386,77 +2572,6 @@ export default function Home() {
               </div>
             ) : null}
             <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                    Provider route
-                  </span>
-                  <p className="mt-1 text-sm font-medium">
-                    {analysisProvider ? activeProviderLabel : "AI/ML API -> Featherless -> Gemini"}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {analysisProviderModel ? analysisProviderModel : providerPriorityLabel}
-                  </p>
-                </div>
-                <span className="rounded-full border border-line bg-panel px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-                  {providerAttempts.length > 0 ? `${providerAttempts.length} attempt${providerAttempts.length === 1 ? "" : "s"}` : "Ready"}
-                </span>
-              </div>
-              {providerAttempts.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {providerAttempts.map((attempt, index) => (
-                    <span
-                      key={`${attempt.provider}-${attempt.model ?? "model"}-${index}`}
-                      className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                        attempt.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"
-                      }`}
-                      title={attempt.error}
-                    >
-                      {attempt.label}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                    Resend alert
-                  </span>
-                  <p className="mt-1 text-sm font-medium">
-                    {alertStatus
-                      ? alertStatusLabel(alertStatus.status)
-                      : integrationStatus.resend
-                      ? "Ready"
-                      : "Not configured"}
-                  </p>
-                  <p className="text-xs text-muted">
-                    Threshold {typeof alertStatus?.threshold === "number" ? alertStatus.threshold.toFixed(1) : typeof alertThreshold === "number" ? alertThreshold.toFixed(1) : "-"} / 10
-                  </p>
-                </div>
-                <span
-                  className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-                    alertStatus
-                      ? alertBadgeTone(alertStatus.status)
-                      : statusBadgeTone(integrationStatus.resend)
-                  }`}
-                >
-                  {alertStatus
-                    ? alertStatusLabel(alertStatus.status)
-                    : integrationStatus.resend
-                    ? "Ready"
-                    : "Missing"}
-                </span>
-              </div>
-              {alertStatus?.reason ? (
-                <p className="mt-2 text-xs text-muted">{alertStatus.reason}</p>
-              ) : null}
-              {alertStatus?.recipients ? (
-                <p className="mt-1 text-xs text-muted">Recipients: {alertStatus.recipients}</p>
-              ) : null}
-            </div>
-            <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
                 Contract title
               </span>
@@ -2529,6 +2644,97 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              {providerResultCards.length > 0 ? (
+                <div className="rounded-3xl border border-line bg-panel p-4 text-sm text-ink">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                        Provider cross-check
+                      </h3>
+                      <p className="mt-1 text-xs text-muted">
+                        Gemini leads, Featherless runs in parallel, and the score below is consolidated from both.
+                      </p>
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${riskScoreTone}`}>
+                      {analysisComparison?.consolidatedScore === null || analysisComparison?.consolidatedScore === undefined
+                        ? "No combined score"
+                        : `Combined ${analysisComparison.consolidatedScore.toFixed(1)} / 10`}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {providerResultCards.map((provider) => (
+                      <div key={`${provider.provider}-${provider.model}`} className="rounded-2xl border border-line bg-white p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+                              {provider.label}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-ink">{provider.model || "Model not reported"}</div>
+                          </div>
+                          <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${provider.ok && provider.score !== null && provider.score >= 6.5 ? "border-red-200 bg-red-50 text-red-700" : provider.ok && provider.score !== null && provider.score >= 3.5 ? "border-amber-200 bg-amber-50 text-amber-800" : provider.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                            {provider.ok ? provider.score === null ? "No score" : `${provider.score.toFixed(1)} / 10` : "Failed"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-muted">
+                          {provider.findingsCount} finding{provider.findingsCount === 1 ? "" : "s"} captured
+                        </p>
+                        {provider.error ? (
+                          <p className="mt-2 text-xs text-signal">{provider.error}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                      Agreed flags
+                    </h4>
+                    {agreementFlags.length > 0 ? (
+                      <div className="grid gap-2">
+                        {agreementFlags.map((flag) => (
+                          <div key={`${flag.flag}-${flag.category}-${flag.risk}`} className="rounded-xl border border-line bg-white px-3 py-2 text-xs text-muted">
+                            <strong className="text-ink">Flag {flag.flag}: {flag.category} ({flag.risk})</strong> - {flag.labels.join(" + ")} agreed on this risk.
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-line bg-white px-3 py-2 text-xs text-muted">
+                        {noAgreementCopy}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                      Featherless gap-fill
+                    </h4>
+                    <div className="rounded-2xl border border-line bg-white p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-ink">Clauses Gemini missed</div>
+                          <div className="mt-1 text-xs text-muted">
+                            {featherlessGapClauses.length} Featherless-only clause{featherlessGapClauses.length === 1 ? "" : "s"} surfaced
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2">
+                        {featherlessGapClauses.length > 0 ? (
+                          featherlessGapClauses.map((clause) => (
+                            <div key={`featherless-gap-${clause.id}`} className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                              <strong className="text-ink">{clause.category} ({clause.risk})</strong> - Featherless found this clause Gemini did not surface: {clause.recommendation}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                            {noGapCopy}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>

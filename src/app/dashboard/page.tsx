@@ -10,6 +10,52 @@ import { saveScrollPosition, restoreScrollPosition } from "../../lib/scroll-posi
 type ProviderName = "aiml" | "featherless" | "gemini";
 type IntakeSource = "paste" | "document" | "speechmatics" | "sample";
 
+type SavedFinding = {
+  id: string;
+  risk: "Low" | "Medium" | "High";
+  category: string;
+  evidence: string;
+  recommendation: string;
+};
+
+type AnalysisComparison = {
+  providers: Array<{
+    provider: ProviderName;
+    label: string;
+    model: string;
+    score: number | null;
+    narrative: string[];
+    summary: string[];
+    findings: SavedFinding[];
+  }>;
+  consolidatedScore: number | null;
+  mergedNarrative: string[];
+  mergedSummary: string[];
+  mergedFindings: SavedFinding[];
+  agreementFlags?: Array<{
+    flag: string;
+    category: string;
+    risk: "Low" | "Medium" | "High";
+    providers: ProviderName[];
+    labels: string[];
+    findings: SavedFinding[];
+  }>;
+  missedClauses: Array<{
+    provider: ProviderName;
+    label: string;
+    clauses: SavedFinding[];
+  }>;
+  featherlessGapClauses?: SavedFinding[];
+};
+
+type ProviderAttempt = {
+  provider: ProviderName;
+  label: string;
+  ok: boolean;
+  model?: string;
+  error?: string;
+};
+
 type AlertStatus = {
   provider: "resend";
   status: "sent" | "skipped" | "error";
@@ -31,19 +77,15 @@ type SavedReport = {
   score?: number | null;
   label: string;
   createdAt: string;
-  findings?: Array<{
-    id: string;
-    risk: "Low" | "Medium" | "High";
-    category: string;
-    evidence: string;
-    recommendation: string;
-  }>;
+  findings?: SavedFinding[];
   html: string;
   provider?: ProviderName | null;
   providerLabel?: string | null;
   providerModel?: string | null;
   alertStatus?: AlertStatus | null;
   intakeSource?: IntakeSource;
+  analysisComparison?: AnalysisComparison | null;
+  providerAttempts?: ProviderAttempt[];
 };
 
 type SecurityEvent = {
@@ -61,10 +103,21 @@ type SecurityEvent = {
 const ITEMS_PER_PAGE = 6;
 
 function providerDisplayName(provider?: ProviderName | null) {
-  if (provider === "aiml") return "AI/ML API Gemini";
-  if (provider === "featherless") return "Featherless open-source";
-  if (provider === "gemini") return "Gemini API";
+  if (provider === "aiml") return "Gemini";
+  if (provider === "featherless") return "Featherless gap-fill";
+  if (provider === "gemini") return "Gemini direct";
   return "Provider not recorded";
+}
+
+function normalizeProviderLabel(label?: string | null, provider?: ProviderName | null) {
+  const fallback = providerDisplayName(provider);
+  if (!label) return fallback;
+
+  return label
+    .replace(/Gemini\s*\(AI\/ML API\)/gi, "Gemini")
+    .replace(/Gemini AI\/ML/gi, "Gemini")
+    .replace(/AI\/ML API Gemini/gi, "Gemini")
+    .replace(/Gemini API/gi, "Gemini direct");
 }
 
 export default function DashboardPage() {
@@ -342,7 +395,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="font-serif text-3xl font-semibold">Report dashboard</h1>
-              <p className="mt-2 text-sm text-muted">View AI/ML API, Featherless, and Gemini reports, plus Speechmatics intake and Resend alert metadata.</p>
+              <p className="mt-2 text-sm text-muted">View Gemini-led reports with Featherless gap-filling, plus Speechmatics intake and Resend alert metadata.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button onClick={clearAllReports} className="button-pop rounded-full border border-line bg-white px-3 py-2 text-xs font-semibold text-ink transition hover:border-accent hover:text-accent">Clear all</button>
@@ -390,7 +443,7 @@ export default function DashboardPage() {
 
           {securityEvents.length > 0 ? (
             <div className="mt-4 grid gap-4 xl:grid-cols-3">
-              <div className="flex max-h-[28rem] flex-col overflow-hidden rounded-2xl border border-red-200 bg-white">
+              <div className="flex max-h-112 flex-col overflow-hidden rounded-2xl border border-red-200 bg-white">
                 <div className="border-b border-red-100 bg-red-50 px-4 py-3">
                   <p className="text-sm font-semibold text-red-800">Blocked attempts</p>
                   <p className="text-xs text-red-700">Requests stopped by guardrails.</p>
@@ -407,7 +460,7 @@ export default function DashboardPage() {
                         </div>
                         <p className="mt-2 truncate text-sm font-medium text-ink">{event.contractTitle}</p>
                         <p className="mt-1 truncate text-[11px] text-muted">
-                          {event.providerLabel || providerDisplayName(event.provider)}
+                          {normalizeProviderLabel(event.providerLabel, event.provider)}
                         </p>
                         {renderBlockedTerms(event)}
                         <p className="mt-1 truncate text-xs text-muted">{event.reason}</p>
@@ -419,7 +472,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="flex max-h-[28rem] flex-col overflow-hidden rounded-2xl border border-amber-200 bg-white">
+              <div className="flex max-h-112 flex-col overflow-hidden rounded-2xl border border-amber-200 bg-white">
                 <div className="border-b border-amber-100 bg-amber-50 px-4 py-3">
                   <p className="text-sm font-semibold text-amber-800">Errors</p>
                   <p className="text-xs text-amber-700">Failures that were not moderation blocks.</p>
@@ -436,7 +489,7 @@ export default function DashboardPage() {
                         </div>
                         <p className="mt-2 truncate text-sm font-medium text-ink">{event.contractTitle}</p>
                         <p className="mt-1 truncate text-[11px] text-muted">
-                          {event.providerLabel || providerDisplayName(event.provider)}
+                          {normalizeProviderLabel(event.providerLabel, event.provider)}
                         </p>
                         {renderBlockedTerms(event)}
                         <p className="mt-1 truncate text-xs text-muted">{event.reason}</p>
@@ -448,7 +501,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="flex max-h-[28rem] flex-col overflow-hidden rounded-2xl border border-line bg-white">
+              <div className="flex max-h-112 flex-col overflow-hidden rounded-2xl border border-line bg-white">
                 <div className="border-b border-line px-4 py-3">
                   <p className="text-sm font-semibold text-ink">Other security events</p>
                   <p className="text-xs text-muted">Allowed analyses and fallbacks.</p>
@@ -465,7 +518,7 @@ export default function DashboardPage() {
                         </div>
                         <p className="mt-2 truncate text-sm font-medium text-ink">{event.contractTitle}</p>
                         <p className="mt-1 truncate text-[11px] text-muted">
-                          {event.providerLabel || providerDisplayName(event.provider)}
+                          {normalizeProviderLabel(event.providerLabel, event.provider)}
                         </p>
                         {renderBlockedTerms(event)}
                         <p className="mt-1 truncate text-xs text-muted">{event.reason}</p>
@@ -484,12 +537,12 @@ export default function DashboardPage() {
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="font-serif text-2xl font-semibold text-ink">Reports and delivery stack</h2>
-              <p className="mt-1 text-sm text-muted">Saved memo exports include provider, model, Speechmatics intake, and Resend alert context.</p>
+              <p className="mt-1 text-sm text-muted">Saved memo exports include Gemini/Featherless agreement flags, Featherless gap-fill clauses, provider models, intake, and Resend alert context.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">AI/ML API</span>
-              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Featherless</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Gemini</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Featherless gap-fill</span>
+              <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Gemini direct fallback</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Speechmatics</span>
               <span className="rounded-full border border-line bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Resend</span>
             </div>
@@ -582,7 +635,7 @@ export default function DashboardPage() {
         </section>
 
         <div className="mt-8 rounded-2xl border border-line bg-panel px-5 py-4 text-xs text-muted">
-          GeminEYE is provided for informational support only and does not replace legal advice. Provider stack: AI/ML API primary, Featherless open-source fallback/helper, Gemini final fallback, Speechmatics transcription, and Resend alerts.
+          GeminEYE is provided for informational support only and does not replace legal advice. Provider stack: Gemini-first analysis with Featherless gap-filling, Speechmatics transcription, and Resend alerts.
         </div>
 
         {showUndo && deletedReport ? (

@@ -1,7 +1,7 @@
 {
   "name": "gemineye",
   "version": "0.1.0",
-  "description": "Domain-specialized contract risk agent with AI/ML API primary routing, Featherless open-source fallback, Gemini fallback, Speechmatics transcription, and Resend alerts.",
+  "description": "Domain-specialized contract risk agent with Gemini primary routing, Featherless open-source fallback, Gemini fallback, Speechmatics transcription, and Resend alerts.",
   "keywords": [
     "contract",
     "risk",
@@ -9,7 +9,7 @@
     "legal",
     "ai",
     "agent",
-    "aimlapi",
+    "gemini",
     "featherless",
     "speechmatics",
     "resend",

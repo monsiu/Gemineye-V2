@@ -3,6 +3,62 @@ import { memo } from "react";
 type ProviderName = "aiml" | "featherless" | "gemini";
 type IntakeSource = "paste" | "document" | "speechmatics" | "sample";
 
+type SavedFinding = {
+  id: string;
+  risk: "Low" | "Medium" | "High";
+  category: string;
+  evidence: string;
+  recommendation: string;
+};
+
+type AnalysisComparison = {
+  providers: Array<{
+    provider: ProviderName;
+    label: string;
+    model: string;
+    score: number | null;
+    narrative: string[];
+    summary: string[];
+    findings: SavedFinding[];
+  }>;
+  consolidatedScore: number | null;
+  mergedNarrative: string[];
+  mergedSummary: string[];
+  mergedFindings: SavedFinding[];
+  agreementFlags?: Array<{
+    flag: string;
+    category: string;
+    risk: "Low" | "Medium" | "High";
+    providers: ProviderName[];
+    labels: string[];
+    findings: SavedFinding[];
+  }>;
+  missedClauses: Array<{
+    provider: ProviderName;
+    label: string;
+    clauses: SavedFinding[];
+  }>;
+  featherlessGapClauses?: SavedFinding[];
+};
+
+type ProviderAttempt = {
+  provider: ProviderName;
+  label: string;
+  ok: boolean;
+  model?: string;
+  error?: string;
+};
+
+type ProviderResultCard = {
+  provider: ProviderName;
+  label: string;
+  model?: string;
+  score: number | null;
+  findingsCount: number;
+  ok: boolean;
+  error?: string;
+};
+
 type AlertStatus = {
   provider: "resend";
   status: "sent" | "skipped" | "error";
@@ -19,19 +75,15 @@ type SavedReport = {
   score?: number | null;
   label: string;
   createdAt: string;
-  findings?: Array<{
-    id: string;
-    risk: "Low" | "Medium" | "High";
-    category: string;
-    evidence: string;
-    recommendation: string;
-  }>;
+  findings?: SavedFinding[];
   html: string;
   provider?: ProviderName | null;
   providerLabel?: string | null;
   providerModel?: string | null;
   alertStatus?: AlertStatus | null;
   intakeSource?: IntakeSource;
+  analysisComparison?: AnalysisComparison | null;
+  providerAttempts?: ProviderAttempt[];
 };
 
 interface ReportCardProps {
@@ -96,10 +148,50 @@ function scoreMeta(score?: number | null) {
 }
 
 function providerDisplayName(provider?: ProviderName | null) {
-  if (provider === "aiml") return "AI/ML API Gemini";
-  if (provider === "featherless") return "Featherless open-source";
-  if (provider === "gemini") return "Gemini API";
+  if (provider === "aiml") return "Gemini";
+  if (provider === "featherless") return "Featherless gap-fill";
+  if (provider === "gemini") return "Gemini direct";
   return "Provider not recorded";
+}
+
+function normalizeProviderLabel(label?: string | null, provider?: ProviderName | null) {
+  const fallback = providerDisplayName(provider);
+  if (!label) return fallback;
+
+  return label
+    .replace(/Gemini\s*\(AI\/ML API\)/gi, "Gemini")
+    .replace(/Gemini AI\/ML/gi, "Gemini")
+    .replace(/AI\/ML API Gemini/gi, "Gemini")
+    .replace(/Gemini API/gi, "Gemini direct");
+}
+
+function buildProviderResultCards(
+  comparison?: AnalysisComparison | null,
+  attempts?: ProviderAttempt[]
+): ProviderResultCard[] {
+  const successfulCards =
+    comparison?.providers.map((provider) => ({
+      provider: provider.provider,
+      label: normalizeProviderLabel(provider.label, provider.provider),
+      model: provider.model,
+      score: provider.score,
+      findingsCount: provider.findings.length,
+      ok: true,
+    })) ?? [];
+  const successfulProviders = new Set(successfulCards.map((provider) => provider.provider));
+  const failedCards = (attempts ?? [])
+    .filter((attempt) => !successfulProviders.has(attempt.provider))
+    .map((attempt) => ({
+      provider: attempt.provider,
+      label: normalizeProviderLabel(attempt.label, attempt.provider),
+      model: attempt.model,
+      score: null,
+      findingsCount: 0,
+      ok: attempt.ok,
+      error: attempt.error,
+    }));
+
+  return [...successfulCards, ...failedCards];
 }
 
 function intakeSourceLabel(source?: IntakeSource) {
@@ -150,6 +242,22 @@ function RiskIcon({ risk }: { risk: "Low" | "Medium" | "High" }) {
 
 const ReportCard = memo(function ReportCard({ report, onDownload, onRemove, badgeClass }: ReportCardProps) {
   const overallMeta = scoreMeta(report.score ?? null);
+  const providerResultCards = buildProviderResultCards(report.analysisComparison, report.providerAttempts);
+  const agreementFlags = report.analysisComparison?.agreementFlags ?? [];
+  const featherlessParticipated = Boolean(
+    providerResultCards.some((provider) => provider.provider === "featherless" && provider.ok)
+  );
+  const featherlessGapClauses =
+    report.analysisComparison?.featherlessGapClauses ??
+    report.analysisComparison?.missedClauses.find((provider) => provider.provider === "featherless")?.clauses ??
+    [];
+  const noAgreementCopy = featherlessParticipated
+    ? "Gemini and Featherless did not land on the same risk area in this pass."
+    : "Featherless did not return a valid comparison result for this pass.";
+  const noGapCopy = featherlessParticipated
+    ? "Featherless checked the contract and did not surface an extra clause beyond Gemini."
+    : "Featherless was not available for a gap-fill comparison on this pass.";
+
   return (
     <div className="rounded-3xl border border-line bg-panel p-6">
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -200,7 +308,7 @@ const ReportCard = memo(function ReportCard({ report, onDownload, onRemove, badg
           </span>
         )}
         <span className="inline-flex rounded-full bg-panel-strong px-3 py-1 text-xs font-semibold text-ink">
-          {report.providerLabel || providerDisplayName(report.provider)}
+          {normalizeProviderLabel(report.providerLabel, report.provider)}
         </span>
         {report.providerModel ? (
           <span className="inline-flex max-w-full rounded-full bg-panel-strong px-3 py-1 text-xs font-semibold text-ink wrap-break-word">
@@ -263,6 +371,66 @@ const ReportCard = memo(function ReportCard({ report, onDownload, onRemove, badg
           </div>
         </div>
       )}
+
+      {providerResultCards.length > 0 ? (
+        <div className="mt-4 rounded-2xl border border-line bg-white p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Gemini + Featherless cross-check</h4>
+              <p className="mt-1 text-xs text-muted">Agreement flags and clauses Featherless surfaced after Gemini.</p>
+            </div>
+            <span className="rounded-full border border-line bg-panel px-3 py-1 text-xs font-semibold text-muted">
+              {report.analysisComparison?.consolidatedScore === null || report.analysisComparison?.consolidatedScore === undefined
+                ? "No combined score"
+                : `Combined ${report.analysisComparison.consolidatedScore.toFixed(1)} / 10`}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {providerResultCards.map((provider) => (
+                <div key={`${report.id}-${provider.provider}-${provider.model ?? "model"}`} className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <strong className="text-ink">{provider.label}</strong>
+                      <div className="mt-1 wrap-break-word">{provider.model || "Model not reported"}</div>
+                    </div>
+                    <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                      provider.ok
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    }`}>
+                      {provider.ok ? (provider.score === null ? "No score" : `${provider.score.toFixed(1)} / 10`) : "Failed"}
+                    </span>
+                  </div>
+                  <div className="mt-2">{provider.findingsCount} finding{provider.findingsCount === 1 ? "" : "s"} captured</div>
+                  {provider.error ? <div className="mt-1 text-signal">{provider.error}</div> : null}
+                </div>
+              ))}
+            </div>
+            {agreementFlags.length > 0 ? (
+              agreementFlags.slice(0, 3).map((flag) => (
+                <div key={`${report.id}-flag-${flag.flag}`} className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                  <strong className="text-ink">Flag {flag.flag}: {flag.category} ({flag.risk})</strong> - {flag.labels.join(" + ")} agreed.
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                {noAgreementCopy}
+              </div>
+            )}
+            {featherlessGapClauses.slice(0, 2).map((clause) => (
+              <div key={`${report.id}-gap-${clause.id}`} className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                <strong className="text-ink">Featherless found: {clause.category} ({clause.risk})</strong> - {clause.recommendation}
+              </div>
+            ))}
+            {featherlessGapClauses.length === 0 ? (
+              <div className="rounded-xl border border-line bg-panel px-3 py-2 text-xs text-muted">
+                {noGapCopy}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {report.findings && report.findings.length > 0 && (
         <details className="mt-4">
