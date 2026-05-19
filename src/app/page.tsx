@@ -1217,7 +1217,7 @@ export default function Home() {
   };
 
   const providerLabel = (provider: ProviderName) => {
-    if (provider === "aiml") return "AI/ML API";
+    if (provider === "aiml") return "Gemini";
     if (provider === "featherless") return "Featherless";
     return "Gemini";
   };
@@ -1904,13 +1904,10 @@ export default function Home() {
                         AI providers
                       </span>
                       <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.aiml)}`}>
-                        AI/ML API
+                        Gemini
                       </span>
                       <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.featherless)}`}>
                         Featherless
-                      </span>
-                      <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.gemini)}`}>
-                        Gemini
                       </span>
                     </div>
                     <button
