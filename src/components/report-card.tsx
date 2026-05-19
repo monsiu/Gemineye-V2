@@ -439,8 +439,8 @@ const ReportCard = memo(function ReportCard({ report, onDownload, onRemove, badg
             These are the headline findings only. Download the report to read the full reasoning, clause-by-clause evidence, and recommended edits.
           </p>
           <ul className="mt-3 space-y-2">
-            {report.findings.map((finding) => (
-              <li key={finding.id} className="rounded-2xl border border-line bg-white p-3 text-xs text-muted wrap-break-word">
+            {report.findings.map((finding, index) => (
+              <li key={`${finding.id}-${index}`} className="rounded-2xl border border-line bg-white p-3 text-xs text-muted wrap-break-word">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
                     <RiskIcon risk={finding.risk} />

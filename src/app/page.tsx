@@ -2717,8 +2717,8 @@ export default function Home() {
                 <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-ink">
                   Findings
                 </h3>
-                {memo.findings.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-line bg-white p-4">
+                {memo.findings.map((item, index) => (
+                  <div key={`${item.id}-${index}`} className="rounded-2xl border border-line bg-white p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex min-w-0 items-start gap-3">
                         <RiskIcon risk={item.risk} />
