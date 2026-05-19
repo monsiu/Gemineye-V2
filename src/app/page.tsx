@@ -31,6 +31,43 @@ type SecurityEvent = {
   blockedTerms?: string[];
 };
 
+type ProviderStatus = {
+  aiml: boolean;
+  gemini: boolean;
+  featherless: boolean;
+};
+
+type ProviderName = "aiml" | "featherless" | "gemini";
+
+type IntegrationStatus = {
+  speechmatics: boolean;
+  resend: boolean;
+};
+
+type AlertStatus = {
+  provider: "resend";
+  status: "sent" | "skipped" | "error";
+  threshold: number;
+  score?: number;
+  recipients?: number;
+  reason?: string;
+  id?: string;
+};
+
+type StatusPayload = {
+  configured?: boolean;
+  providers?: Partial<ProviderStatus>;
+  integrations?: Partial<IntegrationStatus>;
+  alerting?: { threshold?: number };
+};
+
+type TranscriptionPayload = {
+  text?: string;
+  jobId?: string;
+  status?: "completed" | "processing" | "error";
+  error?: string;
+};
+
 const REPORT_LOGO = `
 <svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#0f766e" fill-rule="evenodd"/>
@@ -1006,9 +1043,24 @@ export default function Home() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [apiStatus, setApiStatus] = useState<"checking" | "unknown" | "configured" | "missing">("unknown");
   const [isFallback, setIsFallback] = useState<boolean>(false);
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus>({
+    aiml: false,
+    gemini: false,
+    featherless: false,
+  });
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus>({
+    speechmatics: false,
+    resend: false,
+  });
+  const [alertThreshold, setAlertThreshold] = useState<number | null>(null);
+  const [alertStatus, setAlertStatus] = useState<AlertStatus | null>(null);
+  const [analysisProvider, setAnalysisProvider] = useState<ProviderName | null>(null);
+  const [transcriptionStatus, setTranscriptionStatus] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [activeReviewArea, setActiveReviewArea] = useState<string | null>(null);
   const reviewAreasRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     // Keyboard shortcuts: Ctrl+Enter to analyze, Esc to clear
@@ -1038,9 +1090,23 @@ export default function Home() {
           throw new Error("Status check failed.");
         }
 
-        const data = (await response.json()) as { configured?: boolean };
+        const data = (await response.json()) as StatusPayload;
         if (active) {
           setApiStatus(data.configured ? "configured" : "missing");
+          setProviderStatus({
+            aiml: Boolean(data.providers?.aiml),
+            gemini: Boolean(data.providers?.gemini),
+            featherless: Boolean(data.providers?.featherless),
+          });
+          setIntegrationStatus({
+            speechmatics: Boolean(data.integrations?.speechmatics),
+            resend: Boolean(data.integrations?.resend),
+          });
+          setAlertThreshold(
+            typeof data.alerting?.threshold === "number" && Number.isFinite(data.alerting.threshold)
+              ? data.alerting.threshold
+              : null
+          );
         }
       } catch {
         if (active) {
@@ -1133,6 +1199,29 @@ export default function Home() {
     return "33%";
   };
 
+  const statusBadgeTone = (active: boolean) =>
+    active
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-line bg-panel text-muted";
+
+  const alertBadgeTone = (status: AlertStatus["status"]) => {
+    if (status === "sent") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    if (status === "error") return "border-red-200 bg-red-50 text-red-700";
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  };
+
+  const alertStatusLabel = (status: AlertStatus["status"]) => {
+    if (status === "sent") return "Sent";
+    if (status === "error") return "Failed";
+    return "Skipped";
+  };
+
+  const providerLabel = (provider: ProviderName) => {
+    if (provider === "aiml") return "AI/ML API";
+    if (provider === "featherless") return "Featherless";
+    return "Gemini";
+  };
+
   const overallRiskMeta = (() => {
     const score = Number(memo.overallRiskScore);
     if (memo.overallRiskScore === undefined || memo.overallRiskScore === null || Number.isNaN(score)) {
@@ -1202,9 +1291,16 @@ export default function Home() {
     setFileStatus(null);
     setIsExtracting(false);
     setIsFallback(false);
+    setAlertStatus(null);
+    setAnalysisProvider(null);
+    setTranscriptionStatus(null);
+    setIsTranscribing(false);
     setActiveReviewArea(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    if (audioInputRef.current) {
+      audioInputRef.current.value = "";
     }
   };
 
@@ -1213,6 +1309,8 @@ export default function Home() {
     setAnalyzedContractTitle("");
     setError(null);
     setIsFallback(false);
+    setAlertStatus(null);
+    setAnalysisProvider(null);
     setActiveReviewArea(null);
   };
 
@@ -1241,6 +1339,8 @@ export default function Home() {
           fallback?: boolean;
           error?: string;
           contractTitle?: string;
+          alert?: AlertStatus;
+          provider?: ProviderName;
         };
         if (data.memo) {
           const resolvedMemo = data.memo;
@@ -1251,6 +1351,16 @@ export default function Home() {
           setAnalyzedContractTitle(resolvedContractTitle);
           setIsFallback(resolvedFallback);
           if (data.error) setError(data.error);
+          if (data.alert) {
+            setAlertStatus(data.alert);
+          } else {
+            setAlertStatus(null);
+          }
+          if (data.provider) {
+            setAnalysisProvider(data.provider);
+          } else {
+            setAnalysisProvider(null);
+          }
 
           const generatedReportHtml = buildReportHtml({
             contractTitle: resolvedContractTitle,
@@ -1339,6 +1449,8 @@ export default function Home() {
         fallback?: boolean;
         error?: string;
         contractTitle?: string;
+        alert?: AlertStatus;
+        provider?: ProviderName;
       };
       
       // Cache the result
@@ -1355,6 +1467,16 @@ export default function Home() {
       }
       if (data.contractTitle) {
         setAnalyzedContractTitle(data.contractTitle);
+      }
+      if (data.alert) {
+        setAlertStatus(data.alert);
+      } else {
+        setAlertStatus(null);
+      }
+      if (data.provider) {
+        setAnalysisProvider(data.provider);
+      } else {
+        setAnalysisProvider(null);
       }
 
       const resolvedMemo = data.memo ?? memo;
@@ -1536,10 +1658,58 @@ export default function Home() {
     }
   };
 
+  const handleAudioUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setTranscriptionStatus("Transcribing audio...");
+    setError(null);
+    setIsTranscribing(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await response.json().catch(() => null)) as TranscriptionPayload | null;
+
+      if (response.status === 202) {
+        setTranscriptionStatus(data?.error ?? "Transcription queued. Try again shortly.");
+        return;
+      }
+
+      if (!response.ok) {
+        const message = data?.error ?? `Audio transcription failed (${response.status}).`;
+        throw new Error(message);
+      }
+
+      if (data?.text) {
+        setContractText(data.text);
+        if (!contractTitle.trim()) {
+          setContractTitle(file.name.replace(/\.[^/.]+$/, ""));
+        }
+      }
+
+      setTranscriptionStatus("Transcription complete.");
+    } catch (err) {
+      setTranscriptionStatus(null);
+      setError(err instanceof Error ? err.message : "Audio transcription failed.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const loadSampleContract = (sample: typeof SAMPLE_CONTRACTS[0]) => {
     setContractTitle(sample.title);
     setContractText(sample.text);
     setFileStatus(null);
+    setTranscriptionStatus(null);
     setError(null);
   };
 
@@ -1566,11 +1736,27 @@ export default function Home() {
     setApiStatus("checking");
     try {
       const response = await fetch("/api/status", { method: "GET" });
-      if (response.ok) {
-        setApiStatus("configured");
-      } else {
+      if (!response.ok) {
         setApiStatus("missing");
+        return;
       }
+
+      const data = (await response.json()) as StatusPayload;
+      setApiStatus(data.configured ? "configured" : "missing");
+      setProviderStatus({
+        aiml: Boolean(data.providers?.aiml),
+        gemini: Boolean(data.providers?.gemini),
+        featherless: Boolean(data.providers?.featherless),
+      });
+      setIntegrationStatus({
+        speechmatics: Boolean(data.integrations?.speechmatics),
+        resend: Boolean(data.integrations?.resend),
+      });
+      setAlertThreshold(
+        typeof data.alerting?.threshold === "number" && Number.isFinite(data.alerting.threshold)
+          ? data.alerting.threshold
+          : null
+      );
     } catch {
       setApiStatus("unknown");
     }
@@ -1711,38 +1897,46 @@ export default function Home() {
                 <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-muted">
                   Contract intake
                 </h2>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs uppercase tracking-[0.2em] text-muted">
-                      Gemini status
-                    </span>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${
-                        apiStatus === "checking"
-                          ? "border-line bg-panel text-muted"
-                          : apiStatus === "unknown"
-                          ? "border-line bg-panel text-muted"
-                          : apiStatus === "configured"
-                          ? "border-slate-200 bg-slate-50 text-slate-700"
-                          : "border-stone-200 bg-stone-50 text-stone-700"
-                      }`}
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs uppercase tracking-[0.2em] text-muted">
+                        AI providers
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.aiml)}`}>
+                        AI/ML API
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.featherless)}`}>
+                        Featherless
+                      </span>
+                      <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(providerStatus.gemini)}`}>
+                        Gemini
+                      </span>
+                    </div>
+                    <button
+                      onClick={checkApiConnection}
+                      disabled={apiStatus === "checking"}
+                      className="text-[10px] font-medium text-accent transition hover:text-accent/80 disabled:text-muted"
                     >
-                      {apiStatus === "checking"
-                        ? "Checking"
-                        : apiStatus === "unknown"
-                        ? "Not checked"
-                        : apiStatus === "configured"
-                        ? "Configured"
-                        : "Missing"}
-                    </span>
+                      {apiStatus === "checking" ? "Checking" : "Check"}
+                    </button>
                   </div>
-                  <button
-                    onClick={checkApiConnection}
-                    disabled={apiStatus === "checking"}
-                    className="text-[10px] font-medium text-accent transition hover:text-accent/80 disabled:text-muted"
-                  >
-                    Check
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs uppercase tracking-[0.2em] text-muted">
+                      Integrations
+                    </span>
+                    <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(integrationStatus.resend)}`}>
+                      Resend
+                    </span>
+                    <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.2em] ${statusBadgeTone(integrationStatus.speechmatics)}`}>
+                      Speechmatics
+                    </span>
+                    {typeof alertThreshold === "number" ? (
+                      <span className="rounded-full border border-line bg-panel px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-muted">
+                        Alert {alertThreshold.toFixed(1)} / 10
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div className="mt-4 grid gap-4">
@@ -1768,6 +1962,22 @@ export default function Home() {
                     className="rounded-xl border border-dashed border-line bg-panel-strong p-3 text-sm text-muted"
                   />
                   <span className="text-[10px] text-muted italic">Files over 5MB may take longer to process. Max size is 10MB.</span>
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium text-ink">
+                  Upload audio (Speechmatics)
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac"
+                    onChange={handleAudioUpload}
+                    disabled={!integrationStatus.speechmatics || isTranscribing}
+                    className={`rounded-xl border border-dashed border-line bg-panel-strong p-3 text-sm text-muted ${
+                      !integrationStatus.speechmatics ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  />
+                  <span className="text-[10px] text-muted italic">
+                    Transcribe audio into contract text with Speechmatics. Max size is 25MB.
+                  </span>
                 </label>
                 <div className="flex flex-col gap-2">
                   <span className="text-xs font-medium text-muted">Or try an example:</span>
@@ -1800,6 +2010,11 @@ export default function Home() {
                     {fileStatus}
                   </div>
                 ) : null}
+                {transcriptionStatus ? (
+                  <div className="rounded-xl border border-line bg-white px-3 py-2 text-xs text-muted">
+                    {transcriptionStatus}
+                  </div>
+                ) : null}
                 <div className="rounded-xl border border-line bg-white px-3 py-2">
                   <div className="flex items-center justify-between text-xs text-muted">
                     <span>Text extraction</span>
@@ -1809,6 +2024,25 @@ export default function Home() {
                     <div
                       className={`h-full rounded-full bg-accent transition-all duration-500 ${
                         isExtracting ? "w-3/4" : "w-1/6"
+                      }`}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-line bg-white px-3 py-2">
+                  <div className="flex items-center justify-between text-xs text-muted">
+                    <span>Speechmatics transcription</span>
+                    <span>
+                      {!integrationStatus.speechmatics
+                        ? "Not configured"
+                        : isTranscribing
+                        ? "Transcribing"
+                        : "Ready"}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-panel-strong">
+                    <div
+                      className={`h-full rounded-full bg-accent transition-all duration-500 ${
+                        isTranscribing ? "w-2/3" : integrationStatus.speechmatics ? "w-1/5" : "w-1/12"
                       }`}
                     />
                   </div>
@@ -1855,6 +2089,11 @@ export default function Home() {
                 <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${riskScoreTone}`}>
                   {riskScoreLabel}
                 </span>
+                {analysisProvider ? (
+                  <span className="rounded-full border border-line bg-panel px-3 py-1 text-xs font-semibold text-muted">
+                    {providerLabel(analysisProvider)}
+                  </span>
+                ) : null}
                 {hasAnalysisResult ? (
                   <button
                     onClick={downloadReport}
@@ -1940,6 +2179,44 @@ export default function Home() {
                 <div className="mt-1 font-normal text-[11px] normal-case text-amber-900">This demo report cannot be saved to the dashboard or downloaded.</div>
               </div>
             ) : null}
+            <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                    Resend alert
+                  </span>
+                  <p className="mt-1 text-sm font-medium">
+                    {alertStatus
+                      ? alertStatusLabel(alertStatus.status)
+                      : integrationStatus.resend
+                      ? "Ready"
+                      : "Not configured"}
+                  </p>
+                  <p className="text-xs text-muted">
+                    Threshold {typeof alertStatus?.threshold === "number" ? alertStatus.threshold.toFixed(1) : typeof alertThreshold === "number" ? alertThreshold.toFixed(1) : "-"} / 10
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                    alertStatus
+                      ? alertBadgeTone(alertStatus.status)
+                      : statusBadgeTone(integrationStatus.resend)
+                  }`}
+                >
+                  {alertStatus
+                    ? alertStatusLabel(alertStatus.status)
+                    : integrationStatus.resend
+                    ? "Ready"
+                    : "Missing"}
+                </span>
+              </div>
+              {alertStatus?.reason ? (
+                <p className="mt-2 text-xs text-muted">{alertStatus.reason}</p>
+              ) : null}
+              {alertStatus?.recipients ? (
+                <p className="mt-1 text-xs text-muted">Recipients: {alertStatus.recipients}</p>
+              ) : null}
+            </div>
             <div className="mt-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm text-ink">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
                 Contract title
